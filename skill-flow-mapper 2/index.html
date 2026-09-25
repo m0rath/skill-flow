@@ -1,0 +1,1785 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="Upload a Claude skill or Markdown playbook to see its workflow as a diagram and mind map, find gaps, and fix the file with AI (Claude, ChatGPT or Gemini).">
+<title>Skill Flow Mapper</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3E%3Crect x='1' y='1' width='12' height='8' rx='2' fill='none' stroke='%231F55C4' stroke-width='2'/%3E%3Crect x='7' y='14' width='8' height='8' rx='1.5' transform='rotate(45 7 18)' fill='%23A96300'/%3E%3Crect x='17' y='14' width='12' height='8' rx='2' fill='none' stroke='%230A7A6D' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script src="vendor/jszip.min.js"></script>
+<style>
+:root{
+  --paper:#F2F4F6; --surface:#FFFFFF; --surface-2:#F7F9FA; --ink:#15202B; --muted:#586574; --faint:#8A96A3;
+  --line:#D3DAE1; --wire:#9AA7B4;
+  --step:#1F55C4; --step-bg:#EEF3FD;
+  --decide:#A96300; --decide-bg:#FFF5E6;
+  --loop:#0A7A6D; --loop-bg:#E8F6F3;
+  --make:#3A7419; --make-bg:#EDF6E6;
+  --link:#C2366B;
+  --danger:#B42318; --danger-bg:#FDECEA;
+  --ring:rgba(31,85,196,.35);
+  --shadow:0 1px 2px rgba(21,32,43,.06),0 2px 8px rgba(21,32,43,.05);
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --cond:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --paper:#0E1318; --surface:#161D25; --surface-2:#1B232C; --ink:#E4E9EF; --muted:#9AA6B3; --faint:#6D7986;
+    --line:#29333E; --wire:#4B5866;
+    --step:#79A2FF; --step-bg:#17223A; --decide:#F2A93B; --decide-bg:#2A2012;
+    --loop:#43C7B4; --loop-bg:#112823; --make:#86CB62; --make-bg:#172715; --link:#F27AA8;
+    --danger:#FF7B6E; --danger-bg:#3A1714; --ring:rgba(121,162,255,.4); --shadow:0 1px 2px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#0E1318; --surface:#161D25; --surface-2:#1B232C; --ink:#E4E9EF; --muted:#9AA6B3; --faint:#6D7986;
+  --line:#29333E; --wire:#4B5866;
+  --step:#79A2FF; --step-bg:#17223A; --decide:#F2A93B; --decide-bg:#2A2012;
+  --loop:#43C7B4; --loop-bg:#112823; --make:#86CB62; --make-bg:#172715; --link:#F27AA8;
+  --danger:#FF7B6E; --danger-bg:#3A1714; --ring:rgba(121,162,255,.4); --shadow:0 1px 2px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--paper);color:var(--ink);font:14px/1.5 var(--sans);}
+.wrap{max-width:1600px;margin:0 auto;padding-inline:20px;padding-block:14px 40px;display:flex;flex-direction:column;gap:14px}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--step);outline-offset:2px}
+.mono{font-family:var(--mono)}
+
+/* header */
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto;min-width:0}
+.brand svg{flex:none}
+.brand h1{font:700 20px/1.1 var(--cond);letter-spacing:.01em;margin:0}
+.brand p{margin:0;color:var(--muted);font-size:12.5px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 11px;font-weight:500;font-size:13px;box-shadow:var(--shadow);white-space:nowrap}
+.btn:hover{border-color:var(--wire)}
+.btn.primary{background:var(--step);border-color:var(--step);color:var(--surface)}
+.btn.sm{padding:4px 9px;font-size:12.5px}
+.btn.ghost{box-shadow:none;background:transparent}
+.btn[disabled]{opacity:.45;cursor:default}
+.btn .dotmark{width:7px;height:7px;border-radius:50%;background:var(--decide)}
+.toggle{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);white-space:nowrap}
+
+.drop{border:1.5px dashed var(--wire);border-radius:12px;background:var(--surface-2);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.drop.over{border-color:var(--step);background:var(--step-bg)}
+.drop .hint{flex:1;min-width:200px;color:var(--muted);font-size:12.5px}
+.drop .hint strong{color:var(--ink);font-weight:600}
+.status{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);white-space:nowrap}
+.status .dot{width:8px;height:8px;border-radius:50%;background:var(--faint)}
+.status.claude .dot{background:var(--loop)} .status.quick .dot{background:var(--decide)} .status.example .dot{background:var(--step)}
+.status.busy .dot{background:var(--step);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.status.busy .dot,.typing i{animation:none!important}}
+.err{color:var(--danger);font-size:13px}
+
+.summary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 24px;align-items:start}
+.summary h2{font:700 24px/1.15 var(--cond);margin:0;text-wrap:balance;word-break:break-word}
+.summary .desc{margin:4px 0 0;color:var(--muted);max-width:80ch}
+.trigger{margin-top:6px;display:flex;gap:8px;align-items:baseline;font-size:13px;max-width:95ch}
+.eyebrow{font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.stats{display:flex;gap:6px;flex-wrap:wrap}
+.stat{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 12px;min-width:78px}
+.stat b{display:block;font:600 20px/1.1 var(--cond);font-variant-numeric:tabular-nums}
+.stat span{font-size:11.5px;color:var(--muted)}
+.stat.s b{color:var(--step)} .stat.d b{color:var(--decide)} .stat.l b{color:var(--loop)} .stat.m b{color:var(--make)} .stat.g b{color:var(--danger)}
+@media (max-width:760px){.summary{grid-template-columns:1fr}}
+
+/* main grid */
+.main{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;align-items:start}
+@media (max-width:1060px){.main{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;min-width:0}
+.tabs{display:flex;align-items:center;gap:2px;padding:6px 8px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tab{border:0;background:transparent;padding:6px 10px;border-radius:7px;font-weight:500;font-size:13px;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+.tab[aria-selected="true"]{background:var(--surface-2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.badge{font:500 10.5px/1 var(--mono);padding:2px 5px;border-radius:5px;background:var(--danger-bg);color:var(--danger)}
+.badge.n{background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.toolbar{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap;font-size:12.5px}
+.toolbar .sep{width:1px;height:20px;background:var(--line)}
+.toolbar .grow{flex:1}
+.zoom{display:inline-flex;align-items:center;gap:2px}
+.ib{border:1px solid var(--line);background:var(--surface);min-width:28px;height:28px;border-radius:6px;font-weight:600;line-height:1;padding:0 7px;font-size:12.5px;display:inline-flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap}
+.ib:hover{border-color:var(--wire)}
+.ib[aria-pressed="true"]{border-color:var(--step);color:var(--step);background:var(--step-bg)}
+.zval{font:500 12px var(--mono);width:44px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums}
+select.jump{height:28px;border:1px solid var(--line);border-radius:6px;background:var(--surface);max-width:230px;font-size:12.5px;padding:0 6px}
+.hintline{color:var(--faint);font-size:12px}
+
+.viewport{position:relative;overflow:hidden;height:clamp(460px,calc(100vh - 230px),1400px);touch-action:none;cursor:grab;
+  background:radial-gradient(circle,var(--line) 1px,transparent 1.2px) 0 0/18px 18px,var(--surface-2);border-radius:0 0 12px 12px}
+.viewport.grabbing{cursor:grabbing}
+.vp-inner{position:absolute;left:0;top:0;transform-origin:0 0;width:max-content}
+.vp-inner.anim{transition:transform .28s ease}
+@media (prefers-reduced-motion:reduce){.vp-inner.anim{transition:none}}
+.diagram-inner{padding:24px 28px 40px}
+
+/* flow diagram */
+.flow{display:flex;flex-direction:column;align-items:center}
+.wire{width:2px;min-height:22px;background:var(--wire);position:relative;flex:none}
+.wire.arrow::after{content:"";position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top:6px solid var(--wire);border-bottom:0}
+.wire.grow{flex:1 1 auto}
+.term{border:1.5px solid var(--ink);background:var(--surface);border-radius:999px;padding:7px 16px;font-size:12.5px;max-width:340px;text-align:center}
+.term .eyebrow{display:block;margin-bottom:3px}
+.term.end{background:var(--ink);color:var(--surface)}
+.term.end .eyebrow{color:var(--surface);opacity:.7}
+.node{width:272px;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;text-align:left;box-shadow:var(--shadow);cursor:pointer;display:flex;flex-direction:column;gap:6px;position:relative}
+.node:hover{border-color:var(--wire)}
+.node.sel,.loophead.sel,.parhead.sel{box-shadow:0 0 0 4px var(--ring);border-color:var(--step)}
+.node.flag::after{content:"!";position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;background:var(--danger);color:var(--surface);font:700 12px/18px var(--sans);text-align:center}
+.node .top{display:flex;align-items:center;gap:8px}
+.num{font:500 11px var(--mono);color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-variant-numeric:tabular-nums}
+.kind{font:600 10.5px var(--sans);letter-spacing:.07em;text-transform:uppercase}
+.fold{margin-left:auto;border:1px solid var(--line);background:var(--surface);border-radius:5px;font:600 11px/1 var(--sans);padding:3px 6px;color:var(--muted)}
+.fold:hover{color:var(--ink);border-color:var(--wire)}
+.node h4{margin:0;font:600 14.5px/1.3 var(--sans);text-wrap:balance}
+.node p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.node.step{border-left:4px solid var(--step)} .node.step .kind{color:var(--step)}
+.node.decision{background:var(--decide-bg);border-color:color-mix(in srgb,var(--decide) 45%,var(--line))}
+.node.decision .kind{color:var(--decide)}
+.diamond{width:12px;height:12px;background:var(--decide);transform:rotate(45deg);border-radius:2px;flex:none}
+.node.stop{border-left:4px solid var(--ink)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{display:inline-flex;align-items:center;gap:4px;font:500 11px/1.3 var(--mono);padding:2px 6px;border-radius:5px;max-width:100%;overflow-wrap:anywhere}
+.chip.make{background:var(--make-bg);color:var(--make);border:1px solid color-mix(in srgb,var(--make) 30%,transparent)}
+.chip.use{background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.chip svg{flex:none}
+.chiprow{display:flex;gap:6px;align-items:baseline}
+.chiprow .lbl{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;flex:none;width:34px}
+.branches{display:flex;align-items:stretch}
+.branch{display:flex;flex-direction:column;align-items:center;padding:0 14px;position:relative}
+.branch::before,.branch::after{content:"";position:absolute;left:0;right:0;height:2px;background:var(--wire)}
+.branch::before{top:0} .branch::after{bottom:0}
+.branch:first-child::before,.branch:first-child::after{left:50%}
+.branch:last-child::before,.branch:last-child::after{right:50%}
+.branch:only-child::before,.branch:only-child::after{display:none}
+.blabel{font:600 11.5px/1.2 var(--sans);padding:4px 9px;border-radius:999px;border:1.5px solid var(--decide);color:var(--decide);background:var(--surface);max-width:240px;text-align:center}
+.blabel.par{border-color:var(--wire);color:var(--muted)}
+.blabel.implied{border-style:dashed;border-color:var(--danger);color:var(--danger)}
+.skip{font-size:12px;color:var(--faint);font-style:italic;padding:4px 0}
+.skip.implied{color:var(--danger);font-style:normal;font-weight:500}
+.merge{width:10px;height:10px;border-radius:50%;background:var(--wire)}
+.loop{border:1.5px dashed var(--loop);background:color-mix(in srgb,var(--loop-bg) 70%,transparent);border-radius:14px;padding:0 18px 14px;display:flex;flex-direction:column;align-items:center;min-width:300px}
+.loophead{margin-top:-13px;background:var(--surface);border:1.5px solid var(--loop);color:var(--loop);border-radius:999px;padding:4px 8px 4px 12px;font:600 12px/1.3 var(--sans);display:flex;align-items:center;gap:6px;cursor:pointer;max-width:360px;text-align:left}
+.loophead .num{background:transparent;border-color:color-mix(in srgb,var(--loop) 40%,transparent);color:var(--loop)}
+.loophead .fold{margin-left:6px}
+.loopback{align-self:flex-end;font:500 11px var(--sans);color:var(--loop);display:flex;align-items:center;gap:4px;margin-top:8px}
+.parhead{font:600 11px var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:var(--surface);border:1.5px solid var(--wire);border-radius:6px;padding:3px 9px;cursor:pointer;display:flex;gap:6px;align-items:center}
+.folded{border:1.5px dashed var(--wire);background:var(--surface);border-radius:8px;padding:6px 12px;font-size:12.5px;color:var(--muted)}
+.folded:hover{color:var(--ink);border-color:var(--step)}
+
+/* mind map */
+.mm-layer{position:relative}
+.mm-svg{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.mm-svg path{fill:none}
+.mm-svg .t{stroke:var(--wire);stroke-width:1.8}
+.mm-svg .df{stroke:var(--make);stroke-width:1.6;stroke-dasharray:5 4}
+.mm-svg .ul{stroke:var(--link);stroke-width:2.6}
+.mm-svg .ul.sel{stroke-width:4}
+.mm-svg .hit{stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
+.mm-svg .tmp{stroke:var(--link);stroke-width:2;stroke-dasharray:4 3}
+.mm-svg marker path{stroke:none}
+.mm-svg #arDf path{fill:var(--make)} .mm-svg #arUl path{fill:var(--link)}
+.mm-svg text{font:500 11px var(--sans);fill:var(--decide)}
+.mm-node{position:absolute;transform:translate(-50%,-50%);background:var(--surface);border:1.5px solid var(--line);border-radius:9px;padding:6px 10px;font-size:12.5px;line-height:1.3;max-width:210px;width:max-content;box-shadow:var(--shadow);cursor:pointer;user-select:none;touch-action:none}
+.mm-node .num{margin-right:5px;font-size:10.5px;padding:0 4px}
+.mm-node.root{background:var(--ink);color:var(--surface);border-color:var(--ink);font:700 15px/1.2 var(--cond);padding:10px 16px;max-width:260px;text-align:center}
+.mm-node.step{border-left:4px solid var(--step)}
+.mm-node.decision{background:var(--decide-bg);border-color:color-mix(in srgb,var(--decide) 50%,var(--line))}
+.mm-node.loop{border:1.5px dashed var(--loop);background:var(--loop-bg)}
+.mm-node.parallel{border-style:dashed}
+.mm-node.branch{border:1.5px solid var(--decide);color:var(--decide);border-radius:999px;font-weight:600;font-size:11.5px;padding:3px 10px}
+.mm-node.branch.implied{border-style:dashed;border-color:var(--danger);color:var(--danger)}
+.mm-node.out{background:var(--make-bg);color:var(--make);border-color:color-mix(in srgb,var(--make) 35%,transparent);font:500 11px var(--mono);box-shadow:none}
+.mm-node.use{background:var(--surface-2);color:var(--muted);font:500 11px var(--mono);box-shadow:none}
+.mm-node.sel{box-shadow:0 0 0 4px var(--ring);border-color:var(--step)}
+.mm-node.linksrc{box-shadow:0 0 0 4px color-mix(in srgb,var(--link) 40%,transparent)}
+.mm-node .dot{position:absolute;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:var(--surface);border:2px solid var(--link);cursor:crosshair;opacity:.55}
+.mm-node .dot.r{right:-7px} .mm-node .dot.l{left:-7px}
+.mm-node:hover .dot{opacity:1}
+.mm-lchip{position:absolute;transform:translate(-50%,-50%);background:var(--surface);border:1.5px solid var(--link);color:var(--link);border-radius:999px;font:600 11px/1.2 var(--sans);padding:2px 8px;cursor:pointer;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.mm-lchip.sel{background:var(--link);color:var(--surface)}
+.linkbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--link) 8%,var(--surface));flex-wrap:wrap;font-size:12.5px}
+.linkbar input{border:1px solid var(--line);border-radius:6px;background:var(--surface);padding:3px 8px;min-width:160px;flex:1;max-width:280px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);align-items:center}
+.legend i{display:inline-block;width:14px;height:0;border-top:2px solid;margin-right:5px;vertical-align:3px}
+
+/* outline / suggestions / source */
+.scroll{height:clamp(460px,calc(100vh - 190px),1400px);overflow:auto}
+.outline{padding:16px 20px}
+.outline ol,.outline ul{margin:0;padding-left:20px}
+.outline li{margin:6px 0}
+.outline .o-title{font-weight:600;cursor:pointer}
+.outline .o-title:hover{color:var(--step)}
+.outline .o-meta{color:var(--muted);font-size:13px}
+.outline .o-q{color:var(--decide);font-weight:600;cursor:pointer}
+.outline .o-b{color:var(--decide);font-weight:600}
+.outline .o-b.implied{color:var(--danger)}
+.outline .o-loop{color:var(--loop);font-weight:600;cursor:pointer}
+.sugg{padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+.sugg-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sugg-head p{margin:0;color:var(--muted);font-size:13px;flex:1;min-width:220px}
+.sugg h3{margin:4px 0 0;font:600 15px/1.2 var(--cond);display:flex;align-items:center;gap:8px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;background:var(--surface);border-top:3px solid var(--wire)}
+.card.high{border-top-color:var(--danger)} .card.medium{border-top-color:var(--decide)} .card.low{border-top-color:var(--step)}
+.card .meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sev{font:600 10.5px var(--sans);letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px}
+.sev.high{background:var(--danger-bg);color:var(--danger)} .sev.medium{background:var(--decide-bg);color:var(--decide)} .sev.low{background:var(--step-bg);color:var(--step)}
+.cat{font-size:11.5px;color:var(--muted)}
+.card h4{margin:0;font:600 14px/1.35 var(--sans)}
+.card .whatif{margin:0;font-size:13px;color:var(--decide);font-weight:500}
+.card .fix{margin:0;font-size:13px}
+.card .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.stepref{border:1px solid var(--line);background:var(--surface-2);border-radius:5px;font:500 11px var(--mono);padding:1px 6px;color:var(--step)}
+.empty{color:var(--muted);font-size:13px}
+.source{display:flex;flex-direction:column}
+.filetabs{display:flex;gap:4px;flex-wrap:wrap;padding:6px 10px;border-bottom:1px solid var(--line);align-items:center}
+.filetabs button[data-file]{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:3px 8px;font:500 12px var(--mono)}
+.filetabs button[aria-pressed="true"]{border-color:var(--step);color:var(--step)}
+.filetabs .edited{color:var(--decide)}
+.source pre{margin:0;padding:16px 18px;font:12.5px/1.6 var(--mono);white-space:pre-wrap;word-break:break-word;color:var(--ink)}
+.source mark{background:color-mix(in srgb,var(--decide) 30%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+.source textarea{margin:0;width:100%;height:100%;border:0;padding:16px 18px;font:12.5px/1.6 var(--mono);background:var(--surface);resize:none}
+
+/* side */
+.side{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);display:flex;flex-direction:column;height:calc(100vh - 24px);max-height:1500px}
+@media (max-width:1060px){.side{position:static;height:auto}}
+.side-body{flex:1;overflow:auto;min-height:0}
+.sec{padding:14px 16px;border-bottom:1px solid var(--line)}
+.sec:last-child{border-bottom:0}
+.sec h3{margin:0 0 10px;font:600 15px/1.2 var(--cond);letter-spacing:.01em;display:flex;align-items:center;gap:8px}
+.detail .kindline{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.detail h4{margin:0 0 6px;font:600 17px/1.3 var(--sans);text-wrap:balance}
+.detail p{margin:0 0 8px;font-size:13.5px}
+.detail .blk{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.detail blockquote{margin:0;padding:8px 10px;border-left:3px solid var(--decide);background:var(--surface-2);font:12px/1.5 var(--mono);color:var(--muted);border-radius:0 6px 6px 0;overflow-wrap:anywhere}
+.detail .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.linkbtn{border:0;background:none;padding:0;color:var(--step);font-size:12.5px;font-weight:500;text-align:left}
+.makes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.makes li{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:baseline}
+.makes .nm{font:500 12.5px var(--mono);color:var(--make);overflow-wrap:anywhere}
+.makes .by{grid-column:2;font-size:12px;color:var(--muted)}
+.makes .by button{border:0;background:none;padding:0;color:var(--step);font:500 12px var(--mono)}
+.makes .ic{color:var(--make);grid-row:span 2;padding-top:2px}
+.plain{margin:0;padding-left:18px;font-size:13px}
+.plain li{margin:3px 0}
+
+/* chat */
+.chat{display:flex;flex-direction:column;height:100%;min-height:520px}
+.scopebar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);font-size:12.5px;flex-wrap:wrap}
+.scope-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--step);color:var(--step);background:var(--step-bg);border-radius:999px;padding:2px 10px;font-weight:500;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scope-pill.all{border-color:var(--line);color:var(--muted);background:var(--surface-2)}
+.msgs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.msg{max-width:94%;font-size:13.5px;line-height:1.5;overflow-wrap:anywhere}
+.msg.user{align-self:flex-end;background:var(--step);color:var(--surface);padding:8px 12px;border-radius:12px 12px 3px 12px}
+.msg.user .sc{display:block;font-size:11px;opacity:.8;margin-bottom:2px}
+.msg.assistant{align-self:flex-start;background:var(--surface-2);border:1px solid var(--line);padding:9px 12px;border-radius:12px 12px 12px 3px}
+.msg.tip{align-self:stretch;max-width:none;color:var(--muted);font-size:13px;border:1px dashed var(--line);border-radius:10px;padding:10px 12px}
+.msg.error{color:var(--danger)}
+.msg p{margin:0 0 6px} .msg p:last-child{margin:0}
+.msg ul,.msg ol{margin:4px 0 6px;padding-left:18px}
+.msg code{font:12px var(--mono);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.msg pre{font:12px/1.5 var(--mono);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px;overflow:auto;white-space:pre-wrap}
+.typing{display:inline-flex;gap:3px;align-items:center;color:var(--muted);font-size:12.5px}
+.typing i{width:5px;height:5px;border-radius:50%;background:var(--muted);animation:pulse 1s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+.change{margin-top:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.change-h{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--line);font-size:12px;font-weight:600;flex-wrap:wrap}
+.change-h .ok{color:var(--make)} .change-h .bad{color:var(--danger)}
+.change-h .sp{flex:1}
+.diff{font:11.5px/1.5 var(--mono);max-height:220px;overflow:auto}
+.diff .f{padding:3px 8px;color:var(--muted);background:var(--surface-2);border-top:1px solid var(--line)}
+.diff .f:first-child{border-top:0}
+.diff .del,.diff .add{padding:0 8px;white-space:pre-wrap}
+.diff .del{background:var(--danger-bg);color:var(--danger)}
+.diff .add{background:var(--make-bg);color:var(--make)}
+.quick{display:flex;gap:5px;flex-wrap:wrap;padding:8px 12px 0}
+.quick button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--muted)}
+.quick button:hover{color:var(--ink);border-color:var(--wire)}
+.composer{padding:8px 12px 12px;display:flex;flex-direction:column;gap:6px}
+.composer textarea{width:100%;min-height:64px;max-height:180px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);padding:8px 10px;resize:vertical;font-size:13.5px}
+.composer .row{display:flex;gap:8px;align-items:center}
+.composer .row .grow{flex:1}
+
+/* focus mode */
+body.focus .bar,body.focus .drop,body.focus .summary,body.focus #err{display:none}
+body.focus .main{position:fixed;inset:0;z-index:6;background:var(--paper);padding:calc(env(safe-area-inset-top,0px) + 10px) 12px calc(env(safe-area-inset-bottom,0px) + 10px);max-width:none}
+body.focus .viewport{height:calc(100vh - 110px)}
+body.focus .scroll{height:calc(100vh - 70px)}
+body.focus .side{height:calc(100vh - 20px);top:0}
+
+.modal{position:fixed;inset:0;background:rgba(10,15,20,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+.modal .box{background:var(--surface);border:1px solid var(--line);border-radius:12px;width:min(760px,100%);padding:16px;display:flex;flex-direction:column;gap:10px}
+.modal textarea{width:100%;min-height:300px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);padding:10px;font:12.5px/1.5 var(--mono);resize:vertical}
+.modal .row{display:flex;gap:8px;justify-content:flex-end}
+html{color-scheme:light}
+body{margin:0}
+.keybtn .kdot{width:8px;height:8px;border-radius:50%;background:var(--faint)}
+.keybtn.on .kdot{background:var(--loop)}
+.settings label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:500}
+.settings input[type=password],.settings input[type=text],.settings select{border:1px solid var(--line);border-radius:8px;background:var(--surface-2);padding:7px 10px;font:13px var(--mono);width:100%}
+.settings .inrow{display:flex;gap:6px}
+.settings .note{font-size:12.5px;color:var(--muted);margin:0;line-height:1.5}
+.settings .note a{color:var(--step)}
+.settings .msgline{font-size:13px;min-height:1.2em}
+.settings .msgline.ok{color:var(--make)} .settings .msgline.bad{color:var(--danger)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:8px 14px;border-radius:8px;font-size:13px;z-index:20;max-width:calc(100% - 32px)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="bar">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="12" height="8" rx="2" fill="none" stroke="var(--step)" stroke-width="2"/><path d="M7 9v5" stroke="var(--wire)" stroke-width="2"/><rect x="7" y="14" width="8" height="8" rx="1.5" transform="rotate(45 7 18)" fill="var(--decide)"/><path d="M12 18h6M7 23v4" stroke="var(--wire)" stroke-width="2"/><rect x="17" y="14" width="12" height="8" rx="2" fill="none" stroke="var(--loop)" stroke-width="2"/></svg>
+      <div><h1>Skill Flow Mapper</h1><p>Map, question and fix a Claude skill or Markdown playbook.</p></div>
+    </div>
+    <button class="btn keybtn" id="keyBtn" type="button" title="AI provider, API key and model"><span class="kdot"></span><span id="keyLabel">Add API key</span></button>
+    <button class="btn" id="undoBtn" type="button" disabled title="Undo the last change to the file">Undo</button>
+    <button class="btn primary" id="dlBtn" type="button"><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v9M4 7l4 4 4-4M2 14h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="dlLabel">Download .md</span><span class="dotmark" id="dirtyDot" hidden></span></button>
+    <button class="btn" id="dlZipBtn" type="button" hidden>Download .zip</button>
+    <button class="btn ghost" id="themeBtn" type="button">Theme</button>
+  </header>
+
+  <section class="drop" id="drop">
+    <button class="btn" id="uploadBtn" type="button">
+      <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 11V2M4 6l4-4 4 4M2 14h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Upload file
+    </button>
+    <input type="file" id="fileInput" accept=".md,.markdown,.txt,.mdx,.zip,.skill,text/markdown,text/plain,application/zip" multiple hidden>
+    <button class="btn" id="pasteBtn" type="button">Paste text</button>
+    <div class="hint"><strong>SKILL.md, any .md, or a zipped skill folder.</strong> Drop it anywhere on the page.</div>
+    <label class="toggle" id="aiToggleWrap" hidden><input type="checkbox" id="aiToggle" checked> Map with AI</label>
+    <span class="status example" id="status"><span class="dot"></span><span id="statusText">Example loaded</span></span>
+    <button class="btn sm" id="aiBtn" type="button" hidden>Re-map with AI</button>
+    <button class="btn sm" id="stopBtn" type="button" hidden>Stop</button>
+  </section>
+  <div class="err" id="err" hidden></div>
+
+  <section class="summary" id="summary"></section>
+
+  <div class="main">
+    <section class="panel" aria-label="Workflow">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" data-tab="diagram" aria-selected="true" type="button">Diagram</button>
+        <button class="tab" role="tab" data-tab="mindmap" aria-selected="false" type="button">Mind map</button>
+        <button class="tab" role="tab" data-tab="suggest" aria-selected="false" type="button">Suggestions <span class="badge" id="suggBadge" hidden>0</span></button>
+        <button class="tab" role="tab" data-tab="outline" aria-selected="false" type="button">Outline</button>
+        <button class="tab" role="tab" data-tab="source" aria-selected="false" type="button">Source</button>
+      </div>
+
+      <div id="view-diagram">
+        <div class="toolbar">
+          <button class="ib" id="dFit" type="button" title="Fit to width">Fit</button>
+          <div class="zoom"><button class="ib" id="dOut" type="button" aria-label="Zoom out">&minus;</button><span class="zval" id="dZ">100%</span><button class="ib" id="dIn" type="button" aria-label="Zoom in">+</button></div>
+          <span class="sep"></span>
+          <button class="ib" id="dPrev" type="button" title="Previous step (←)">&larr;</button>
+          <select class="jump" id="jump" aria-label="Jump to step"></select>
+          <button class="ib" id="dNext" type="button" title="Next step (→)">&rarr;</button>
+          <span class="sep"></span>
+          <button class="ib" id="dCollapse" type="button">Collapse all</button>
+          <button class="ib" id="dExpand" type="button">Expand all</button>
+          <span class="grow"></span>
+          <button class="ib" id="mermaidBtn" type="button">Copy Mermaid</button>
+          <button class="ib focusBtn" type="button">Focus</button>
+        </div>
+        <div class="viewport" id="dVp"><div class="vp-inner diagram-inner" id="dInner"></div></div>
+      </div>
+
+      <div id="view-mindmap" hidden>
+        <div class="toolbar">
+          <button class="ib" id="mFit" type="button">Fit</button>
+          <div class="zoom"><button class="ib" id="mOut" type="button" aria-label="Zoom out">&minus;</button><span class="zval" id="mZ">100%</span><button class="ib" id="mIn" type="button" aria-label="Zoom in">+</button></div>
+          <span class="sep"></span>
+          <button class="ib" id="mOuts" type="button" aria-pressed="true">Outputs</button>
+          <button class="ib" id="mUses" type="button" aria-pressed="false">Tools &amp; files</button>
+          <button class="ib" id="mFlow" type="button" aria-pressed="true">Data links</button>
+          <button class="ib" id="mReset" type="button" title="Put every box back in its automatic position">Reset layout</button>
+          <span class="grow"></span>
+          <button class="ib" id="mAsk" type="button" disabled>Ask AI about my links</button>
+          <button class="ib focusBtn" type="button">Focus</button>
+        </div>
+        <div class="toolbar">
+          <div class="legend"><span><i style="border-color:var(--wire)"></i>Structure</span><span><i style="border-color:var(--make);border-top-style:dashed"></i>Data passes (auto)</span><span><i style="border-color:var(--link);border-top-width:3px"></i>Your links</span></div>
+          <span class="grow"></span><span class="hintline">Scroll to pan, Ctrl + scroll to zoom. Drag boxes to arrange. Drag from a pink dot onto another box to connect them.</span>
+        </div>
+        <div class="linkbar" id="linkBar" hidden>
+          <strong>Link</strong><span id="linkDesc"></span>
+          <input id="linkLabel" type="text" placeholder="Label, e.g. needs output of" aria-label="Link label">
+          <button class="btn sm" id="linkAsk" type="button">Ask AI</button>
+          <button class="btn sm" id="linkDel" type="button">Delete</button>
+          <button class="btn sm ghost" id="linkClose" type="button">Done</button>
+        </div>
+        <div class="viewport" id="mVp"><div class="vp-inner" id="mInner"><div class="mm-layer" id="mLayer"></div></div></div>
+      </div>
+
+      <div id="view-suggest" class="scroll" hidden><div class="sugg" id="sugg"></div></div>
+      <div id="view-outline" class="scroll outline" hidden></div>
+      <div id="view-source" class="source" hidden>
+        <div class="filetabs"><span id="fileTabs" style="display:contents"></span><span style="flex:1"></span>
+          <button class="btn sm" id="editBtn" type="button">Edit</button>
+          <button class="btn sm primary" id="saveEdit" type="button" hidden>Save &amp; re-map</button>
+          <button class="btn sm" id="cancelEdit" type="button" hidden>Cancel</button>
+        </div>
+        <div class="scroll" id="srcWrap"><pre id="srcPre"></pre><textarea id="srcEdit" hidden aria-label="Edit file" spellcheck="false"></textarea></div>
+      </div>
+    </section>
+
+    <aside class="panel side">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" data-side="details" aria-selected="true" type="button">Details</button>
+        <button class="tab" role="tab" data-side="chat" aria-selected="false" type="button">Chat with AI <span class="badge n" id="chatBadge" hidden></span></button>
+      </div>
+      <div class="side-body" id="side-details">
+        <section class="sec detail" id="detail" aria-live="polite"></section>
+        <section class="sec"><h3>What it creates <span class="badge n" id="makeCount">0</span></h3><ul class="makes" id="makes"></ul></section>
+        <section class="sec" id="inputsPanel"><h3>Needs before starting</h3><div id="inputs"></div></section>
+        <section class="sec" id="notesPanel"><h3>Rules that apply throughout</h3><div id="notes"></div></section>
+      </div>
+      <div class="side-body chat" id="side-chat" hidden>
+        <div class="scopebar"><span class="eyebrow">Talking about</span><span class="scope-pill all" id="scopePill">Whole workflow</span><button class="linkbtn" id="scopeAll" type="button" hidden>Use whole workflow</button></div>
+        <div class="msgs" id="msgs"></div>
+        <div class="quick" id="quick"></div>
+        <div class="composer">
+          <textarea id="chatIn" placeholder="Ask about the flow, or say what to fix. Example: add a step to validate the ticket ID"></textarea>
+          <div class="row"><label class="toggle"><input type="checkbox" id="autoApply" checked> Apply fixes to the file automatically</label><span class="grow"></span><button class="btn sm" id="chatStop" type="button" hidden>Stop</button><button class="btn sm primary" id="chatSend" type="button">Send</button></div>
+          <div class="err" id="chatErr" hidden></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="pasteTitle">
+    <strong id="pasteTitle">Paste Markdown</strong>
+    <textarea id="pasteArea" placeholder="Paste the contents of a SKILL.md or any Markdown workflow here"></textarea>
+    <div class="row"><button class="btn" id="pasteCancel" type="button">Cancel</button><button class="btn primary" id="pasteGo" type="button">Map workflow</button></div>
+  </div>
+</div>
+<div class="modal" id="settings" hidden>
+  <div class="box settings" role="dialog" aria-modal="true" aria-labelledby="setTitle" style="width:min(580px,100%)">
+    <strong id="setTitle">AI settings</strong>
+    <label class="f" for="provSel">Provider
+      <select id="provSel"><option value="anthropic">Anthropic (Claude)</option><option value="openai">OpenAI (ChatGPT)</option><option value="gemini">Google Gemini</option></select>
+    </label>
+    <p class="note" id="provNote"></p>
+    <label class="f" for="apiKey"><span id="keyTitle">API key</span>
+      <span class="inrow"><input type="password" id="apiKey" autocomplete="off" spellcheck="false"><button class="btn sm" type="button" id="showKey">Show</button></span>
+    </label>
+    <label class="toggle" style="color:var(--ink)"><input type="checkbox" id="rememberKey"> Remember keys on this device (stored in this browser's local storage)</label>
+    <label class="f" for="modelSel">Model
+      <span class="inrow"><select id="modelSel"><option value="">Test the key to load your models</option></select><button class="btn sm" type="button" id="loadModels">Test key</button></span>
+    </label>
+    <label class="f" for="modelCustom">Or type a model ID <input type="text" id="modelCustom" spellcheck="false" placeholder="Model ID"></label>
+    <div class="msgline" id="setMsg"></div>
+    <div class="row"><button class="btn" type="button" id="forgetKey">Remove this key</button><span style="flex:1"></span><button class="btn" type="button" id="setCancel">Cancel</button><button class="btn primary" type="button" id="setSave">Save</button></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+const FENCE = "`".repeat(3);
+/* ================= example ================= */
+const EXAMPLE_MD = `---
+name: incident-postmortem
+description: Drafts a blameless postmortem from an incident ticket, chat export and alert logs. Use when the user asks to write up an incident, create a postmortem, or summarize an outage.
+---
+# Incident Postmortem
+
+## Inputs
+- Incident ticket ID or exported ticket JSON
+- Slack or Teams channel export (optional)
+- Alert log CSV from the monitoring system
+
+## Workflow
+
+### 1. Collect the incident record
+Ask for the ticket ID if it was not provided. Fetch the ticket with \`scripts/fetch_ticket.py <id>\` and save it to \`work/ticket.json\`.
+
+### 2. Classify severity
+Read the \`severity\` field.
+- If severity is SEV1 or SEV2, follow the full review path (steps 3-6).
+- If severity is SEV3 or lower, fill \`templates/short_note.md\`, write \`output/note-<ticket-id>.md\` and skip to step 7.
+
+### 3. Build the timeline
+For each source (ticket comments, chat export, alert log):
+1. Extract timestamped events.
+2. Normalize times to UTC.
+3. Append rows to \`work/timeline.csv\`.
+If no chat export was provided, skip that source and note the gap.
+
+### 4. Identify root cause and contributing factors
+Use the 5 Whys technique. Read \`references/blameless-language.md\` before writing. Never name individuals; describe systems and decisions.
+
+### 5. Draft action items
+Write each action item with owner team, priority (P0-P2) and due date. When an action item has no clear owner, flag it as "Owner needed".
+
+### 6. Assemble the document
+Fill \`templates/postmortem.md\` and write \`output/postmortem-<ticket-id>.md\`. For SEV1 also create \`output/exec-summary.md\` (max 150 words).
+
+### 7. Review with the user
+Show the draft and ask for corrections. If the user requests changes, update the document and repeat this step. When approved, export to PDF with \`scripts/to_pdf.sh\`.
+
+## Rules
+- Times always in UTC.
+- Keep the tone blameless.
+`;
+const EXAMPLE_MODEL = {
+  title:"incident-postmortem",
+  summary:"Drafts a blameless postmortem from an incident ticket, chat export and alert logs.",
+  trigger:"User asks to write up an incident, create a postmortem, or summarize an outage.",
+  inputs:["Incident ticket ID or exported ticket JSON","Slack or Teams channel export (optional)","Alert log CSV from the monitoring system"],
+  notes:["All times in UTC.","Keep the tone blameless: describe systems and decisions, never individuals."],
+  steps:[
+    {kind:"step",title:"Collect the incident record",detail:"Ask for the ticket ID if missing, then fetch the ticket with the helper script and save it locally.",creates:[{name:"work/ticket.json",kind:"file"}],uses:["scripts/fetch_ticket.py"],source:"Fetch the ticket with `scripts/fetch_ticket.py <id>` and save it to `work/ticket.json`."},
+    {kind:"decision",title:"Classify severity",question:"What is the incident severity?",detail:"The severity field decides between the full review and a short note.",uses:["work/ticket.json"],source:"Read the `severity` field.",branches:[
+      {label:"SEV1 or SEV2",steps:[
+        {kind:"loop",title:"Build the timeline",over:"each source: ticket comments, chat export, alert log",detail:"Every source is processed the same way and appended to one timeline.",source:"For each source (ticket comments, chat export, alert log):",steps:[
+          {kind:"decision",title:"Source available?",question:"Was this source provided?",source:"If no chat export was provided, skip that source and note the gap.",branches:[
+            {label:"Yes",steps:[
+              {kind:"step",title:"Extract timestamped events",detail:"Pull every event with a timestamp from the source.",source:"Extract timestamped events."},
+              {kind:"step",title:"Normalize times to UTC",detail:"Convert all timestamps to UTC.",source:"Normalize times to UTC."},
+              {kind:"step",title:"Append rows to timeline",detail:"Add the normalized events to the shared timeline CSV.",creates:[{name:"work/timeline.csv",kind:"file"}],source:"Append rows to `work/timeline.csv`."}
+            ]},
+            {label:"No",steps:[{kind:"step",title:"Note the gap",detail:"Skip the source and record that it was missing.",source:"skip that source and note the gap"}]}
+          ]}
+        ]},
+        {kind:"step",title:"Find root cause",detail:"Apply the 5 Whys to find root cause and contributing factors. Read the blameless language guide first.",uses:["work/timeline.csv","references/blameless-language.md"],source:"Use the 5 Whys technique. Read `references/blameless-language.md` before writing."},
+        {kind:"step",title:"Draft action items",detail:"Each action item gets an owner team, priority P0-P2 and a due date. Items without a clear owner are flagged \"Owner needed\".",creates:[{name:"Action item list",kind:"data"}],source:"Write each action item with owner team, priority (P0-P2) and due date."},
+        {kind:"step",title:"Assemble the postmortem",detail:"Fill the postmortem template and write the final Markdown file.",creates:[{name:"output/postmortem-<ticket-id>.md",kind:"file"}],uses:["templates/postmortem.md","Action item list"],source:"Fill `templates/postmortem.md` and write `output/postmortem-<ticket-id>.md`."},
+        {kind:"decision",title:"Executive summary needed?",question:"Is it SEV1?",source:"For SEV1 also create `output/exec-summary.md` (max 150 words).",branches:[
+          {label:"SEV1",steps:[{kind:"step",title:"Write executive summary",detail:"A summary of at most 150 words.",creates:[{name:"output/exec-summary.md",kind:"file"}],source:"For SEV1 also create `output/exec-summary.md` (max 150 words)."}]},
+          {label:"SEV2",steps:[]}
+        ]}
+      ]},
+      {label:"SEV3 or lower",steps:[
+        {kind:"step",title:"Write the short-form note",detail:"Fill the short note template instead of the full postmortem, then jump to review.",creates:[{name:"output/note-<ticket-id>.md",kind:"file"}],uses:["templates/short_note.md"],source:"fill `templates/short_note.md`, write `output/note-<ticket-id>.md` and skip to step 7."}
+      ]}
+    ]},
+    {kind:"loop",title:"Review with the user",over:"each round of feedback until approved",detail:"Show the draft, collect corrections and update until the user approves.",source:"If the user requests changes, update the document and repeat this step.",steps:[
+      {kind:"step",title:"Show draft and ask for corrections",uses:["output/postmortem-<ticket-id>.md"],source:"Show the draft and ask for corrections."},
+      {kind:"decision",title:"Approved?",question:"Did the user approve?",branches:[
+        {label:"Changes requested",steps:[{kind:"step",title:"Update the document",detail:"Apply the corrections, then repeat the review.",source:"update the document and repeat this step"}]},
+        {label:"Approved",steps:[{kind:"step",title:"Export to PDF",detail:"Convert the final document to PDF.",uses:["scripts/to_pdf.sh"],creates:[{name:"postmortem PDF",kind:"file"}],source:"When approved, export to PDF with `scripts/to_pdf.sh`."}]}
+      ]}
+    ]}
+  ]
+};
+
+/* ================= state ================= */
+const $ = id => document.getElementById(id);
+const S = {
+  files:[{path:"SKILL.md",text:EXAMPLE_MD}], activeFile:0, rawModel:null, model:null, mode:"example",
+  sel:null, collapsed:new Set(), tab:"diagram", side:"details", highlight:null,
+  history:[], dirty:false, chat:[], chatScope:null, links:[], mmPos:{}, mmOpts:{out:true, use:false, flow:true}, mmLink:null,
+  sugg:{claude:null, stale:false, dismissed:[]}, editing:false, fitted:{diagram:false, mindmap:false}
+};
+let sampleFn = null, mapCtl = null, chatCtl = null, suggCtl = null;
+const index = new Map(), numIndex = new Map();
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store = { get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} } };
+const arr = x => Array.isArray(x) ? x : (x == null || x === "" ? [] : [x]);
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ================= model normalize ================= */
+function normCreates(list){ return arr(list).map(c => typeof c === "string" ? {name:c,kind:"other",note:""} : {name:String(c.name ?? c.title ?? "output"), kind:String(c.kind ?? "other"), note:c.note ? String(c.note) : ""}).filter(c => c.name.trim()); }
+function normalize(m){
+  m = m && typeof m === "object" ? m : {};
+  const out = { title:String(m.title || m.name || "Untitled workflow"), summary:String(m.summary || m.description || ""), trigger:String(m.trigger || ""),
+    inputs:arr(m.inputs).map(String), notes:arr(m.notes).map(String), steps:[] };
+  index.clear(); numIndex.clear();
+  let seq = 0;
+  function walk(nodes, prefix, parent){
+    let n = 0;
+    return arr(nodes).filter(x => x && typeof x === "object").map(raw => {
+      let kind = String(raw.kind || raw.type || "step").toLowerCase();
+      if (!["step","decision","loop","parallel","stop"].includes(kind)) kind = kind.startsWith("cond") || kind.startsWith("branch") ? "decision" : kind.startsWith("end") ? "stop" : "step";
+      n++;
+      const num = prefix ? `${prefix}.${n}` : String(n);
+      const node = { id:"n"+(++seq), kind, num, parent, title:String(raw.title || raw.question || raw.name || "Step"), detail:String(raw.detail || raw.description || ""),
+        creates:normCreates(raw.creates || raw.outputs), uses:arr(raw.uses || raw.tools).map(String), source:String(raw.source || raw.quote || "") };
+      index.set(node.id, node); numIndex.set(num, node.id);
+      if (kind === "decision" || kind === "parallel"){
+        node.question = String(raw.question || raw.title || "");
+        let br = arr(raw.branches).filter(b => b && typeof b === "object");
+        if (kind === "decision" && br.length === 1) br.push({label:"Otherwise", steps:[], implied:true});
+        node.branches = br.map((b, i) => ({ label:String(b.label || b.condition || (kind === "parallel" ? "Track " + (i+1) : "Case " + (i+1))), implied:!!b.implied, steps:walk(b.steps, num + String.fromCharCode(97 + i), node.id) }));
+      }
+      if (kind === "loop"){ node.over = String(raw.over || raw.repeat || ""); node.steps = walk(raw.steps, num, node.id); }
+      return node;
+    });
+  }
+  out.steps = walk(m.steps, "", null);
+  return out;
+}
+const ordered = () => [...index.values()];
+function descCount(n){ let c = 0; (function w(ns){ ns.forEach(x => { c++; if (x.branches) x.branches.forEach(b => w(b.steps)); if (x.steps) w(x.steps); }); })(n.branches ? n.branches.flatMap(b => b.steps) : n.steps || []); return c; }
+
+/* ================= quick parser ================= */
+const FILE_RE = /`?((?:[\w.\-<>{}~]+\/)*[\w.\-<>{}]+\.(?:md|mdx|json|html?|pdf|docx|xlsx|pptx|csv|tsv|txt|py|js|ts|sh|ya?ml|png|jpe?g|svg|zip|xml|sql))`?/gi;
+const MAKE_VERB = /\b(creat|writ|sav|generat|output|produc|export|build|emit|render|append|store|draft)\w*/i;
+const INPUT_DIR = /^(templates?|references?|scripts?|examples?|assets?|docs?)\//i;
+function frontmatter(text){
+  const m = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
+  if (!m) return {meta:{}, body:text};
+  const meta = {};
+  m[1].split("\n").forEach(l => { const k = l.match(/^([\w-]+):\s*(.*)$/); if (k) meta[k[1]] = k[2].replace(/^["']|["']$/g, ""); });
+  return {meta, body:text.slice(m[0].length)};
+}
+const clean = s => s.replace(/\*\*|__|`/g, "").replace(/^\s*(step|phase|stage)\s*\d+\s*[:.\-–)]\s*/i, "").replace(/^\s*\d+[.)]\s*/, "").trim();
+function shortTitle(s){ s = clean(s); const cut = s.split(/(?<=[.;:])\s|,\s(?=(?:then|and|if|when)\b)/)[0]; return (cut.length > 64 ? cut.slice(0, 61).replace(/\s\S*$/, "") + "…" : cut).replace(/[.:]$/, ""); }
+function extract(body){
+  const creates = [], uses = [], seen = new Set();
+  body.split(/(?<=[.!?])\s+|\n/).forEach(sent => {
+    const verb = MAKE_VERB.test(sent);
+    for (const m of sent.matchAll(FILE_RE)){
+      const f = m[1]; if (seen.has(f)) continue; seen.add(f);
+      if (verb && !INPUT_DIR.test(f)) creates.push({name:f, kind:"file"}); else uses.push(f);
+    }
+  });
+  for (const m of body.matchAll(/`([^`\n]{2,60})`/g)){
+    const t = m[1].trim(); FILE_RE.lastIndex = 0;
+    if (!seen.has(t) && !FILE_RE.test(t) && /^[\w.\-\/ <>]+$/.test(t) && t.split(" ").length <= 4){ seen.add(t); uses.push(t); }
+    FILE_RE.lastIndex = 0;
+  }
+  return {creates, uses:uses.slice(0, 6)};
+}
+function splitCondition(line){
+  const s = clean(line.replace(/^\s*[-*+]\s*/, ""));
+  const m = s.match(/^(if|when|unless|in case|for)\s+(.+?)(?:,\s*|\s+then\s+|:\s*)(.+)$/i);
+  if (m) return {cond:(m[1].toLowerCase() === "unless" ? "Unless " : "") + m[2], then:m[3]};
+  const o = s.match(/^otherwise,?\s*(.+)$/i);
+  if (o) return {cond:"Otherwise", then:o[1]};
+  return {cond:s.slice(0, 50), then:s};
+}
+function sectionToNodes(title, lines){
+  const body = lines.join("\n");
+  const {creates, uses} = extract(title + "\n" + body);
+  const prose = lines.filter(l => l.trim() && !/^\s*([-*+]|\d+[.)])\s/.test(l) && !/^\s*(if|when|unless|otherwise)\b/i.test(l)).join(" ").trim();
+  const condLines = lines.filter(l => /^\s*([-*+]\s*)?(if|when|unless|otherwise|in case)\b/i.test(l));
+  const subItems = lines.filter(l => /^\s*\d+[.)]\s+/.test(l)).map(l => l.replace(/^\s*\d+[.)]\s+/, ""));
+  const loopM = (title + " " + body).match(/\b(for each|for every|repeat(?:ing)?|iterate over|loop over|until)\b([^.\n:]{0,70})/i);
+  const node = { kind:"step", title:shortTitle(title), detail:(clean(prose) || clean(title)).slice(0, 320), creates, uses, source:(lines.find(l => l.trim()) || title).trim().slice(0, 140) };
+  if (loopM && subItems.length){ node.kind = "loop"; node.over = (loopM[1] + loopM[2]).trim(); node.steps = subItems.map(s => ({kind:"step", title:shortTitle(s), detail:clean(s), source:s.slice(0,140), ...extract(s)})); }
+  else if (loopM){ node.kind = "loop"; node.over = (loopM[1] + loopM[2]).trim(); node.steps = [{kind:"step", title:node.title, detail:node.detail}]; }
+  const res = [node];
+  if (condLines.length){
+    const parts = condLines.map(splitCondition);
+    const q = parts.length === 1 ? parts[0].cond.replace(/[.?]$/, "") + "?" : "Which case applies?";
+    const mk = p => ({kind:"step", title:shortTitle(p.then), detail:clean(p.then), source:p.then.slice(0,140), ...extract(p.then)});
+    res.push({ kind:"decision", title:q, question:q, source:condLines[0].trim().slice(0,140),
+      branches: parts.length === 1 ? [{label:"Yes", steps:[mk(parts[0])]}, {label:"No", steps:[], implied:true}] : parts.map(p => ({label:p.cond.slice(0, 48), steps:[mk(p)]})) });
+  }
+  return res;
+}
+function quickParse(files){
+  const primary = files.find(f => /(^|\/)skill\.md$/i.test(f.path)) || files[0];
+  const {meta, body} = frontmatter(primary.text);
+  const sections = []; let cur = {level:0, title:"", lines:[]}, inCode = false;
+  body.split("\n").forEach(l => {
+    if (/^\s*```/.test(l)) inCode = !inCode;
+    const h = !inCode && l.match(/^(#{1,6})\s+(.*)$/);
+    if (h){ sections.push(cur); cur = {level:h[1].length, title:h[2].trim(), lines:[]}; } else cur.lines.push(l);
+  });
+  sections.push(cur);
+  const h1 = sections.find(s => s.level === 1);
+  const SKIP = /^(inputs?|prerequisites?|requirements?|rules|notes?|guidelines?|references?|examples?|overview|about|introduction|faq|tips|gotchas|troubleshooting|resources|output format|when to use)\b/i;
+  const inputsSec = sections.find(s => /^(inputs?|prerequisites?|requirements?|what you need)/i.test(clean(s.title)));
+  const notesSec = sections.find(s => /^(rules|guidelines|notes?|constraints|gotchas|important)/i.test(clean(s.title)));
+  const listItems = sec => sec ? sec.lines.filter(l => /^\s*([-*+]|\d+[.)])\s/.test(l)).map(l => clean(l.replace(/^\s*([-*+]|\d+[.)])\s+/, ""))) : [];
+  let steps = [];
+  const stepHeads = sections.filter(s => s.level >= 2 && /^(\**\s*)?(step|phase|stage)\s*\d+|^\d+[.)]\s/i.test(s.title));
+  if (stepHeads.length >= 2) steps = stepHeads.flatMap(s => sectionToNodes(s.title, s.lines));
+  else {
+    const items = []; let it = null;
+    sections.filter(s => !SKIP.test(clean(s.title))).forEach(s => s.lines.forEach(l => {
+      const m = l.match(/^(\d+)[.)]\s+(.*)$/);
+      if (m){ it = {title:m[2], lines:[m[2]]}; items.push(it); }
+      else if (it && /^\s{2,}\S/.test(l)) it.lines.push(l.trim());
+      else if (l.trim()) it = null;
+    }));
+    if (items.length >= 2) steps = items.flatMap(i => sectionToNodes(i.title, i.lines));
+    else steps = sections.filter(s => s.level === 2 && !SKIP.test(clean(s.title))).flatMap(s => sectionToNodes(s.title, s.lines));
+  }
+  if (!steps.length) steps = [{kind:"step", title:"No clear steps found", detail:"This file has no numbered steps or step headings. Try mapping with AI for a better read."}];
+  return { title:meta.name || (h1 && clean(h1.title)) || primary.path, summary:meta.description || "", trigger:(meta.description || "").match(/\buse (?:this )?(?:skill )?when\b(.*)/i)?.[0] || "",
+    inputs:listItems(inputsSec), notes:listItems(notesSec).slice(0, 8), steps };
+}
+
+/* ================= pan / zoom viewport ================= */
+function makeViewport(vp, inner, zLabel){
+  const st = {x:0, y:0, k:1};
+  const apply = () => { inner.style.transform = `translate(${st.x}px,${st.y}px) scale(${st.k})`; if (zLabel) zLabel.textContent = Math.round(st.k * 100) + "%"; };
+  const pointers = new Map(); let drag = null, pinch = null;
+  const blocked = t => t.closest("button,input,textarea,select,.node,.loophead,.parhead,.mm-node,.mm-lchip,.hit,.folded");
+  vp.addEventListener("pointerdown", e => {
+    if (blocked(e.target)) return;
+    vp.setPointerCapture(e.pointerId); pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if (pointers.size === 1) drag = {x:e.clientX, y:e.clientY, sx:st.x, sy:st.y};
+    else if (pointers.size === 2){ const [a, b] = [...pointers.values()]; pinch = {d:Math.hypot(a.x-b.x, a.y-b.y) || 1, k:st.k}; drag = null; }
+    vp.classList.add("grabbing");
+  });
+  vp.addEventListener("pointermove", e => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if (pinch && pointers.size === 2){ const [a, b] = [...pointers.values()]; const r = vp.getBoundingClientRect(); zoomTo(pinch.k * Math.hypot(a.x-b.x, a.y-b.y) / pinch.d, (a.x+b.x)/2 - r.left, (a.y+b.y)/2 - r.top); }
+    else if (drag){ st.x = drag.sx + e.clientX - drag.x; st.y = drag.sy + e.clientY - drag.y; apply(); }
+  });
+  const end = e => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = null; if (!pointers.size){ drag = null; vp.classList.remove("grabbing"); } };
+  vp.addEventListener("pointerup", end); vp.addEventListener("pointercancel", end);
+  vp.addEventListener("wheel", e => {
+    e.preventDefault();
+    const r = vp.getBoundingClientRect();
+    if (e.ctrlKey || e.metaKey) zoomTo(st.k * Math.exp(-e.deltaY * 0.0022), e.clientX - r.left, e.clientY - r.top);
+    else { st.x -= e.shiftKey ? e.deltaY : e.deltaX; st.y -= e.shiftKey ? 0 : e.deltaY; apply(); }
+  }, {passive:false});
+  function zoomTo(k, cx, cy){ k = Math.max(0.2, Math.min(2.5, k)); st.x = cx - (cx - st.x) * (k / st.k); st.y = cy - (cy - st.y) * (k / st.k); st.k = k; apply(); }
+  function zoomBy(f){ const r = vp.getBoundingClientRect(); zoomTo(st.k * f, r.width / 2, r.height / 2); }
+  function fit(mode){
+    const r = vp.getBoundingClientRect(), w = inner.offsetWidth, h = inner.offsetHeight;
+    if (!w || !r.width) return false;
+    const kw = (r.width - 24) / w, kh = (r.height - 24) / h;
+    st.k = Math.max(0.2, Math.min(1, mode === "all" ? Math.min(kw, kh) : Math.max(kw < 0.55 ? Math.min(kw, kh) : kw, 0.2)));
+    if (mode !== "all") st.k = Math.max(0.2, Math.min(1, kw));
+    st.x = (r.width - w * st.k) / 2; st.y = mode === "all" ? Math.max(12, (r.height - h * st.k) / 2) : 12;
+    animate(); apply(); return true;
+  }
+  function fitMin(minK, el){
+    const r = vp.getBoundingClientRect(), w = inner.offsetWidth, h = inner.offsetHeight;
+    if (!w || !r.width) return false;
+    st.k = Math.max(minK, Math.min(1, (r.width - 24) / w, (r.height - 24) / h));
+    st.x = (r.width - w * st.k) / 2; st.y = (r.height - h * st.k) / 2; apply();
+    if (el && st.k > Math.min((r.width - 24) / w, (r.height - 24) / h)) centerOn(el); else animate();
+    return true;
+  }
+  function animate(){ if (reduceMotion) return; inner.classList.add("anim"); clearTimeout(animate._t); animate._t = setTimeout(() => inner.classList.remove("anim"), 300); }
+  function centerOn(el){ if (!el) return; const r = vp.getBoundingClientRect(), b = el.getBoundingClientRect(); if (!r.width) return; st.x += (r.left + r.width/2) - (b.left + b.width/2); st.y += (r.top + r.height/2) - (b.top + b.height/2); animate(); apply(); }
+  const toLayer = (cx, cy) => { const r = vp.getBoundingClientRect(); return {x:(cx - r.left - st.x) / st.k, y:(cy - r.top - st.y) / st.k}; };
+  apply();
+  return {st, apply, zoomBy, fit, fitMin, centerOn, toLayer};
+}
+const dView = makeViewport($("dVp"), $("dInner"), $("dZ"));
+const mView = makeViewport($("mVp"), $("mInner"), $("mZ"));
+
+/* ================= local gap checks ================= */
+function allText(){ return S.files.map(f => f.text).join("\n"); }
+function localChecks(){
+  const out = [];
+  ordered().forEach(n => {
+    if (n.branches && n.kind === "decision"){
+      const implied = n.branches.filter(b => b.implied);
+      if (implied.length){
+        const other = n.branches.find(b => !b.implied);
+        out.push({id:"l-br-"+n.num, sev:"medium", cat:"Missing branch", nodeId:n.id,
+          title:`Step ${n.num} only says what to do in one case`,
+          whatIf:`What happens if "${other ? other.label : n.question}" is not the case?`,
+          suggestion:`Add an explicit "otherwise" instruction for step ${n.num}: continue, stop, or ask the user.`});
+      }
+    }
+    if (n.kind === "loop" && !n.over) out.push({id:"l-loop-"+n.num, sev:"low", cat:"Loop exit", nodeId:n.id, title:`Step ${n.num} repeats without a stated end`, whatIf:"When does this loop stop?", suggestion:"State what it repeats over, or the condition that ends it."});
+  });
+  (S.model.inputs || []).forEach((inp, i) => {
+    if (/optional/i.test(inp)){
+      const kw = (inp.match(/[A-Za-z]{4,}/g) || []).filter(w => !/optional|export|from|with|file/i.test(w))[0] || "";
+      const handled = kw && ordered().some(n => n.kind === "decision" && (n.question + " " + n.branches.map(b => b.label).join(" ") + " " + n.source).toLowerCase().includes(kw.toLowerCase()));
+      if (!handled) out.push({id:"l-in-"+i, sev:"medium", cat:"Missing input path", nodeId:null, title:`Optional input may not be handled: ${inp.replace(/\s*\(optional\)/i, "")}`, whatIf:`What happens if "${inp.replace(/\s*\(optional\)/i, "")}" is not provided?`, suggestion:"Add a step or condition that says what to do without it."});
+    }
+  });
+  if (!/\b(error|fail|failure|invalid|exception|retry|timeout|cannot|can't|unable|not found)\b/i.test(allText()))
+    out.push({id:"l-err", sev:"high", cat:"Error handling", nodeId:null, title:"No failure handling anywhere in the file", whatIf:"What happens if a script, tool call or fetch fails, or an input is invalid?", suggestion:"Add what to do on failure: retry, report to the user, or stop with a clear message."});
+  const real = S.files.filter(f => !f.virtual);
+  if (real.length > 1){
+    const have = S.files.map(f => f.path).join("\n");
+    const listed = (S.files.find(f => f.virtual) || {text:""}).text;
+    const refs = new Set(); ordered().forEach(n => n.uses.forEach(u => { if (INPUT_DIR.test(u)) refs.add(u); }));
+    refs.forEach(r => { if (!have.includes(r) && !listed.includes(r)) out.push({id:"l-ref-"+r, sev:"low", cat:"Missing file", nodeId:null, title:`Referenced file not in the upload: ${r}`, whatIf:`What if ${r} does not exist when the skill runs?`, suggestion:"Add the file to the skill folder or fix the path."}); });
+  }
+  return out.filter(s => !S.sugg.dismissed.includes(s.id));
+}
+function flaggedIds(){
+  const ids = new Set();
+  localChecks().forEach(s => s.nodeId && ids.add(s.nodeId));
+  (S.sugg.claude || []).forEach(s => { if (s.nodeId && !S.sugg.dismissed.includes(s.id)) ids.add(s.nodeId); });
+  return ids;
+}
+
+/* ================= diagram ================= */
+const ICON_FILE = '<svg width="10" height="11" viewBox="0 0 10 11" aria-hidden="true"><path d="M1 1h5l3 3v6H1z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>';
+const ICON_LOOP = '<svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.5M13 2v3h-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function chips(n){
+  let h = "";
+  if (n.creates.length) h += `<div class="chiprow"><span class="lbl">makes</span><div class="chips">${n.creates.map(c => `<span class="chip make">${ICON_FILE}${esc(c.name)}</span>`).join("")}</div></div>`;
+  if (n.uses.length) h += `<div class="chiprow"><span class="lbl">uses</span><div class="chips">${n.uses.slice(0,3).map(u => `<span class="chip use">${esc(u)}</span>`).join("")}${n.uses.length > 3 ? `<span class="chip use">+${n.uses.length-3}</span>` : ""}</div></div>`;
+  return h;
+}
+const wire = (arrow = true, grow = false) => `<div class="wire${arrow ? " arrow" : ""}${grow ? " grow" : ""}"></div>`;
+let FLAGS = new Set();
+function renderNode(n){
+  const sel = S.sel === n.id ? " sel" : "", flag = FLAGS.has(n.id) ? " flag" : "";
+  const col = S.collapsed.has(n.id);
+  const fold = (n.branches || (n.steps && n.steps.length)) ? `<button type="button" class="fold" data-fold="${n.id}" aria-label="${col ? "Expand" : "Collapse"}">${col ? "Expand" : "Collapse"}</button>` : "";
+  const attrs = `data-id="${n.id}" tabindex="0" role="button"`;
+  if (n.kind === "decision" || n.kind === "parallel"){
+    const isPar = n.kind === "parallel";
+    const head = isPar
+      ? `<div class="parhead${sel}" ${attrs}>${esc(n.num)} · In parallel${n.title && n.title !== "Step" ? " · " + esc(n.title) : ""}${fold}</div>`
+      : `<div class="node decision${sel}${flag}" ${attrs}><div class="top"><span class="diamond"></span><span class="num">${esc(n.num)}</span><span class="kind">Decision</span>${fold}</div><h4>${esc(n.question || n.title)}</h4>${n.detail ? `<p>${esc(n.detail)}</p>` : ""}${chips(n)}</div>`;
+    if (col) return `<div class="flow">${head}${wire()}<button type="button" class="folded" data-fold="${n.id}">${n.branches.map(b => esc(b.label)).join(" / ")} · ${descCount(n)} steps hidden</button></div>`;
+    const branches = n.branches.map(b => `<div class="branch">${wire(false)}<span class="blabel${isPar ? " par" : ""}${b.implied ? " implied" : ""}">${esc(b.label)}</span>${b.steps.length ? wire() + renderFlow(b.steps) : wire(false) + (b.implied ? `<span class="skip implied">Not described</span>` : `<span class="skip">${isPar ? "nothing" : "continue"}</span>`)}${wire(false, true)}</div>`).join("");
+    return `<div class="flow">${head}${wire(false)}<div class="branches">${branches}</div>${wire(false)}<div class="merge"></div></div>`;
+  }
+  if (n.kind === "loop"){
+    const head = `<div class="loophead${sel}" ${attrs}>${ICON_LOOP}<span class="num">${esc(n.num)}</span><span>${esc(n.title)}${n.over ? ` <span style="font-weight:500">· ${esc(n.over)}</span>` : ""}</span>${fold}</div>`;
+    if (col) return `<div class="loop">${head}${wire()}<button type="button" class="folded" data-fold="${n.id}">${descCount(n)} steps hidden</button></div>`;
+    return `<div class="loop">${head}${wire()}${renderFlow(n.steps)}<div class="loopback">${ICON_LOOP} repeat</div></div>`;
+  }
+  const k = n.kind === "stop" ? "stop" : "step";
+  return `<div class="node ${k}${sel}${flag}" ${attrs} title="${esc(n.detail)}"><div class="top"><span class="num">${esc(n.num)}</span><span class="kind">${k === "stop" ? "Stop" : "Step"}</span></div><h4>${esc(n.title)}</h4>${n.detail && n.detail !== n.title ? `<p>${esc(n.detail)}</p>` : ""}${chips(n)}</div>`;
+}
+function renderFlow(nodes){ return `<div class="flow">${nodes.map((n, i) => (i ? wire() : "") + renderNode(n)).join("")}</div>`; }
+function renderDiagram(){
+  FLAGS = flaggedIds();
+  const m = S.model, outs = allCreates().length;
+  $("dInner").innerHTML = `<div class="flow"><div class="term"><span class="eyebrow">Start</span>${esc(m.trigger || "Skill is invoked")}</div>${wire()}${renderFlow(m.steps)}${wire()}<div class="term end"><span class="eyebrow">Done</span>${outs ? outs + " output" + (outs > 1 ? "s" : "") + " produced" : "Workflow complete"}</div></div>`;
+  $("jump").innerHTML = `<option value="">Jump to step…</option>` + ordered().map(n => `<option value="${n.id}"${S.sel === n.id ? " selected" : ""}>${esc(n.num)} · ${esc((n.kind === "decision" ? n.question || n.title : n.title).slice(0, 48))}</option>`).join("");
+}
+
+/* ================= mind map ================= */
+const COLW = 240, ROW = 50;
+let MM = null;
+function mmBuild(){
+  const root = {key:"root", label:S.model.title, kind:"root", children:[]};
+  const add = (parent, n) => {
+    const mm = {key:"n:" + n.num, id:n.id, num:n.num, label:n.kind === "decision" ? (n.question || n.title) : n.title, kind:n.kind, children:[]};
+    parent.children.push(mm);
+    if (n.branches) n.branches.forEach(b => { const bn = {key:"b:" + n.num + ":" + b.label, id:n.id, label:b.label + (b.steps.length ? "" : b.implied ? " · not described" : " · continue"), kind:"branch", implied:b.implied, children:[]}; mm.children.push(bn); b.steps.forEach(s => add(bn, s)); });
+    if (n.steps) n.steps.forEach(s => add(mm, s));
+    if (S.mmOpts.out) n.creates.forEach(c => mm.children.push({key:"o:" + n.num + ":" + c.name, id:n.id, label:c.name, kind:"out", children:[]}));
+    if (S.mmOpts.use) n.uses.forEach(u => mm.children.push({key:"u:" + n.num + ":" + u, id:n.id, label:u, kind:"use", children:[]}));
+  };
+  S.model.steps.forEach(n => add(root, n));
+  const leaves = mm => (mm.leaves = mm.children.length ? mm.children.reduce((a, c) => a + leaves(c), 0) : 1);
+  leaves(root);
+  const total = root.leaves; let acc = 0;
+  root.children.forEach(c => { c.side = acc < total / 2 ? 1 : -1; acc += c.leaves; });
+  const place = (mm, depth, side, y0) => { mm.side = side; mm.ax = side * depth * COLW; mm.ay = y0 + mm.leaves * ROW / 2; let y = y0; mm.children.forEach(c => { place(c, depth + 1, side, y); y += c.leaves * ROW; }); };
+  [1, -1].forEach(side => { const kids = root.children.filter(c => c.side === side); const h = kids.reduce((a, c) => a + c.leaves, 0) * ROW; let y = -h / 2; kids.forEach(c => { place(c, 1, side, y); y += c.leaves * ROW; }); });
+  root.ax = 0; root.ay = 0; root.side = 1;
+  const list = []; (function w(mm, parent){ mm.parent = parent; list.push(mm); mm.children.forEach(c => w(c, mm)); })(root, null);
+  list.forEach(mm => { const p = S.mmPos[mm.key]; mm.x = p ? p.x : mm.ax; mm.y = p ? p.y : mm.ay; });
+  return {root, list, byKey:new Map(list.map(m => [m.key, m]))};
+}
+function renderMindmap(){
+  MM = mmBuild();
+  const xs = MM.list.map(m => m.x), ys = MM.list.map(m => m.y);
+  const minX = Math.min(...xs) - 180, minY = Math.min(...ys) - 60, maxX = Math.max(...xs) + 180, maxY = Math.max(...ys) + 60;
+  MM.ox = -minX; MM.oy = -minY;
+  const layer = $("mLayer");
+  layer.style.width = (maxX - minX) + "px"; layer.style.height = (maxY - minY) + "px";
+  const flags = flaggedIds();
+  layer.innerHTML = `<svg class="mm-svg" id="mSvg" width="${maxX - minX}" height="${maxY - minY}"></svg>` + MM.list.map(m => {
+    const cls = ["mm-node", m.kind, m.implied ? "implied" : "", m.id && S.sel === m.id && m.kind !== "out" && m.kind !== "use" && m.kind !== "branch" ? "sel" : ""].join(" ");
+    const num = m.num ? `<span class="num">${esc(m.num)}</span>` : "";
+    const flag = m.id && flags.has(m.id) && m.key.startsWith("n:") ? ' <span style="color:var(--danger);font-weight:700">!</span>' : "";
+    return `<div class="${cls}" data-key="${esc(m.key)}" style="left:${m.x + MM.ox}px;top:${m.y + MM.oy}px">${num}${esc(m.label)}${flag}<span class="dot ${m.side < 0 ? "l" : "r"}" data-dot="${esc(m.key)}" title="Drag to another box to connect"></span></div>`;
+  }).join("") + S.links.map((l, i) => `<div class="mm-lchip${S.mmLink === i ? " sel" : ""}" data-link="${i}">${esc(l.label || "link")}</div>`).join("");
+  layer.querySelectorAll(".mm-node").forEach(el => { const m = MM.byKey.get(el.dataset.key); if (m){ m.el = el; m.w = el.offsetWidth; m.h = el.offsetHeight; } });
+  mmDrawEdges();
+  $("mAsk").disabled = !S.links.length;
+  renderLinkBar();
+}
+function edgePt(m, toward){
+  const cx = m.x + MM.ox, cy = m.y + MM.oy, dx = toward.x - cx, dy = toward.y - cy;
+  if (!dx && !dy) return {x:cx, y:cy};
+  const s = Math.min((m.w / 2 + 4) / Math.abs(dx || 1e-6), (m.h / 2 + 4) / Math.abs(dy || 1e-6));
+  return {x:cx + dx * s, y:cy + dy * s};
+}
+function curve(a, b){ const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1; const off = Math.min(60, len * 0.2); const cx = mx - dy / len * off, cy = my + dx / len * off; return {d:`M${a.x},${a.y} Q${cx},${cy} ${b.x},${b.y}`, mid:{x:(a.x + 2 * cx + b.x) / 4, y:(a.y + 2 * cy + b.y) / 4}}; }
+function dataFlows(){
+  const res = [], seen = new Set();
+  const nodes = ordered();
+  nodes.forEach(p => p.creates.forEach(c => {
+    const nm = c.name.toLowerCase(), base = nm.split("/").pop();
+    nodes.forEach(q => {
+      if (q === p) return;
+      const hay = (q.uses.join(" ") + " " + q.source + " " + q.detail).toLowerCase();
+      if (q.uses.some(u => u.toLowerCase() === nm) || (base.length > 5 && hay.includes(base))){ const k = p.id + ">" + q.id; if (!seen.has(k)){ seen.add(k); res.push({from:p, to:q, name:c.name}); } }
+    });
+  }));
+  return res;
+}
+function mmDrawEdges(){
+  if (!MM) return;
+  const svg = $("mSvg"); let h = `<defs><marker id="arDf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z"/></marker><marker id="arUl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z"/></marker></defs>`;
+  MM.list.forEach(m => {
+    if (!m.parent) return;
+    const p = m.parent, side = m.x >= p.x ? 1 : -1;
+    const a = {x:p.x + MM.ox + side * p.w / 2, y:p.y + MM.oy}, b = {x:m.x + MM.ox - side * m.w / 2, y:m.y + MM.oy};
+    const dx = (b.x - a.x) / 2;
+    h += `<path class="t" d="M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y} ${b.x},${b.y}"/>`;
+  });
+  if (S.mmOpts.flow) dataFlows().forEach(f => {
+    const from = MM.byKey.get("o:" + f.from.num + ":" + f.name) || MM.byKey.get("n:" + f.from.num), to = MM.byKey.get("n:" + f.to.num);
+    if (!from || !to || !from.w || !to.w) return;
+    const a = edgePt(from, {x:to.x + MM.ox, y:to.y + MM.oy}), b = edgePt(to, {x:from.x + MM.ox, y:from.y + MM.oy});
+    h += `<path class="df" d="${curve(a, b).d}" marker-end="url(#arDf)"/>`;
+  });
+  S.links.forEach((l, i) => {
+    const from = MM.byKey.get(l.from), to = MM.byKey.get(l.to), chip = document.querySelector(`[data-link="${i}"]`);
+    if (!from || !to || !from.w || !to.w){ if (chip) chip.hidden = true; return; }
+    const a = edgePt(from, {x:to.x + MM.ox, y:to.y + MM.oy}), b = edgePt(to, {x:from.x + MM.ox, y:from.y + MM.oy}), c = curve(a, b);
+    h += `<path class="ul${S.mmLink === i ? " sel" : ""}" d="${c.d}" marker-end="url(#arUl)"/><path class="hit" data-link="${i}" d="${c.d}"/>`;
+    if (chip){ chip.hidden = false; chip.style.left = c.mid.x + "px"; chip.style.top = c.mid.y + "px"; }
+  });
+  svg.innerHTML = h + `<path class="tmp" id="mTmp" d=""/>`;
+}
+/* mind map interactions */
+(function(){
+  const layer = $("mLayer"); let op = null;
+  layer.addEventListener("pointerdown", e => {
+    const dot = e.target.closest("[data-dot]");
+    const node = e.target.closest(".mm-node");
+    if (!node && !dot) return;
+    e.stopPropagation();
+    layer.setPointerCapture(e.pointerId);
+    const m = MM.byKey.get((dot || node).dataset.dot || node.dataset.key);
+    if (dot){ op = {type:"link", m}; m.el.classList.add("linksrc"); }
+    else op = {type:"drag", m, sx:e.clientX, sy:e.clientY, ox:m.x, oy:m.y, moved:false};
+  });
+  layer.addEventListener("pointermove", e => {
+    if (!op) return;
+    if (op.type === "drag"){
+      const dx = (e.clientX - op.sx) / mView.st.k, dy = (e.clientY - op.sy) / mView.st.k;
+      if (!op.moved && Math.hypot(dx, dy) < 4) return;
+      op.moved = true; op.m.x = op.ox + dx; op.m.y = op.oy + dy;
+      op.m.el.style.left = (op.m.x + MM.ox) + "px"; op.m.el.style.top = (op.m.y + MM.oy) + "px";
+      mmDrawEdges();
+    } else {
+      const p = mView.toLayer(e.clientX, e.clientY), a = {x:op.m.x + MM.ox, y:op.m.y + MM.oy};
+      $("mTmp").setAttribute("d", `M${a.x},${a.y} L${p.x},${p.y}`);
+    }
+  });
+  const end = e => {
+    if (!op) return;
+    const o = op; op = null;
+    if (o.type === "drag"){
+      if (o.moved){ S.mmPos[o.m.key] = {x:o.m.x, y:o.m.y}; save(); }
+      else if (o.m.id){ select(o.m.id); }
+    } else {
+      o.m.el.classList.remove("linksrc");
+      $("mTmp").setAttribute("d", "");
+      const t = document.elementFromPoint(e.clientX, e.clientY)?.closest(".mm-node");
+      if (t && t.dataset.key !== o.m.key){
+        S.links.push({from:o.m.key, to:t.dataset.key, label:""});
+        S.mmLink = S.links.length - 1; save(); renderMindmap(); setTimeout(() => $("linkLabel").focus(), 0);
+      }
+    }
+  };
+  layer.addEventListener("pointerup", end); layer.addEventListener("pointercancel", end);
+  layer.addEventListener("click", e => { const l = e.target.closest("[data-link]"); if (l){ S.mmLink = +l.dataset.link; renderMindmap(); } });
+  $("mSvg") && 0;
+  $("mVp").addEventListener("click", e => { const l = e.target.closest(".hit"); if (l){ S.mmLink = +l.dataset.link; renderMindmap(); } });
+})();
+function mmName(key){ const m = MM && MM.byKey.get(key); if (!m) return key; return (m.num ? m.num + " " : "") + m.label; }
+function renderLinkBar(){
+  const l = S.links[S.mmLink];
+  $("linkBar").hidden = !l;
+  if (!l) return;
+  $("linkDesc").textContent = `${mmName(l.from)} → ${mmName(l.to)}`;
+  if (document.activeElement !== $("linkLabel")) $("linkLabel").value = l.label || "";
+}
+$("linkLabel").addEventListener("input", e => { const l = S.links[S.mmLink]; if (!l) return; l.label = e.target.value; const chip = document.querySelector(`[data-link="${S.mmLink}"]`); if (chip) chip.textContent = l.label || "link"; save(); });
+$("linkDel").onclick = () => { S.links.splice(S.mmLink, 1); S.mmLink = null; save(); renderMindmap(); };
+$("linkClose").onclick = () => { S.mmLink = null; renderMindmap(); };
+$("linkAsk").onclick = () => { const l = S.links[S.mmLink]; if (!l) return; setScope(null); openChat(); sendChat(`In the mind map I connected "${mmName(l.from)}" to "${mmName(l.to)}"${l.label ? ` with the label "${l.label}"` : ""}. How are these related in the workflow? Is this dependency stated clearly in the file, and is anything missing?`); };
+$("mAsk").onclick = () => { if (!S.links.length) return; setScope(null); openChat(); sendChat("I drew these connections in the mind map:\n" + S.links.map(l => `- ${mmName(l.from)} → ${mmName(l.to)}${l.label ? ` (${l.label})` : ""}`).join("\n") + "\nExplain how each pair is related, whether the file states it clearly, and what is missing."); };
+$("mOuts").onclick = e => { S.mmOpts.out = !S.mmOpts.out; e.currentTarget.setAttribute("aria-pressed", S.mmOpts.out); renderMindmap(); };
+$("mUses").onclick = e => { S.mmOpts.use = !S.mmOpts.use; e.currentTarget.setAttribute("aria-pressed", S.mmOpts.use); renderMindmap(); };
+$("mFlow").onclick = e => { S.mmOpts.flow = !S.mmOpts.flow; e.currentTarget.setAttribute("aria-pressed", S.mmOpts.flow); mmDrawEdges(); };
+$("mReset").onclick = () => { S.mmPos = {}; save(); renderMindmap(); mView.fitMin(0.6, document.querySelector('#mLayer [data-key="root"]')); };
+$("mFit").onclick = () => mView.fit("all");
+$("mZ").title = "Ctrl + scroll to zoom";
+$("mIn").onclick = () => mView.zoomBy(1.2); $("mOut").onclick = () => mView.zoomBy(1 / 1.2);
+
+/* ================= outline / source ================= */
+function outlineList(nodes){
+  return `<ol>${nodes.map(n => {
+    if (n.kind === "decision" || n.kind === "parallel")
+      return `<li><span class="o-q" data-id="${n.id}">${esc(n.num)} ${n.kind === "parallel" ? "In parallel" : "Decide"}: ${esc(n.question || n.title)}</span><ul>${n.branches.map(b => `<li><span class="o-b${b.implied ? " implied" : ""}">${esc(b.label)}</span> → ${b.steps.length ? outlineList(b.steps) : `<span class="o-meta">${b.implied ? "not described in the file" : "continue"}</span>`}</li>`).join("")}</ul></li>`;
+    if (n.kind === "loop") return `<li><span class="o-loop" data-id="${n.id}">${esc(n.num)} Repeat: ${esc(n.title)}</span>${n.over ? ` <span class="o-meta">(${esc(n.over)})</span>` : ""}${outlineList(n.steps)}</li>`;
+    const mk = n.creates.length ? ` <span class="o-meta">→ creates ${n.creates.map(c => `<span class="mono">${esc(c.name)}</span>`).join(", ")}</span>` : "";
+    return `<li><span class="o-title" data-id="${n.id}">${esc(n.num)} ${esc(n.title)}</span>${mk}${n.detail && n.detail !== n.title ? `<div class="o-meta">${esc(n.detail)}</div>` : ""}</li>`;
+  }).join("")}</ol>`;
+}
+function renderOutline(){ $("view-outline").innerHTML = `<p class="o-meta" style="margin-top:0">Start: ${esc(S.model.trigger || "skill is invoked")}</p>` + outlineList(S.model.steps); }
+function outlineText(nodes = S.model.steps, ind = ""){
+  return nodes.map(n => {
+    if (n.branches) return `${ind}${n.num} [${n.kind}] ${n.question || n.title}\n` + n.branches.map(b => `${ind}  - branch "${b.label}"${b.implied ? " (not described in file)" : ""}:\n` + (b.steps.length ? outlineText(b.steps, ind + "    ") : `${ind}    (continue)\n`)).join("");
+    if (n.kind === "loop") return `${ind}${n.num} [loop] ${n.title}${n.over ? " — repeats for " + n.over : ""}\n` + outlineText(n.steps, ind + "  ");
+    return `${ind}${n.num} [${n.kind}] ${n.title}${n.creates.length ? " (creates: " + n.creates.map(c => c.name).join(", ") + ")" : ""}\n`;
+  }).join("");
+}
+function renderSource(){
+  $("fileTabs").innerHTML = S.files.length > 1 ? S.files.map((f, i) => `<button type="button" data-file="${i}" aria-pressed="${i === S.activeFile}">${esc(f.path)}${f.edited ? ' <span class="edited">•</span>' : ""}</button>`).join("") : `<span class="mono" style="font-size:12px;color:var(--muted)">${esc(S.files[0].path)}${S.files[0].edited ? ' <span class="edited">• edited</span>' : ""}</span>`;
+  const f = S.files[S.activeFile] || S.files[0];
+  $("editBtn").hidden = S.editing || f.virtual; $("saveEdit").hidden = !S.editing; $("cancelEdit").hidden = !S.editing;
+  $("srcPre").hidden = S.editing; $("srcEdit").hidden = !S.editing;
+  if (S.editing) return;
+  const text = f.text || "";
+  let html = esc(text);
+  if (S.highlight){
+    const q = S.highlight.trim().slice(0, 80);
+    let at = q.length > 4 ? text.indexOf(q) : -1;
+    if (at < 0 && q.length > 4) at = text.toLowerCase().indexOf(q.replace(/`/g, "").toLowerCase());
+    if (at >= 0){ const len = Math.min(S.highlight.trim().length, text.length - at); html = esc(text.slice(0, at)) + '<mark id="hl">' + esc(text.slice(at, at + len)) + "</mark>" + esc(text.slice(at + len)); }
+  }
+  $("srcPre").innerHTML = html;
+  const hl = document.getElementById("hl"); if (hl) hl.scrollIntoView({block:"center"});
+}
+$("editBtn").onclick = () => { S.editing = true; $("srcEdit").value = S.files[S.activeFile].text; renderSource(); $("srcEdit").focus(); };
+$("cancelEdit").onclick = () => { S.editing = false; renderSource(); };
+$("saveEdit").onclick = () => {
+  const v = $("srcEdit").value, f = S.files[S.activeFile];
+  S.editing = false;
+  if (v !== f.text){ snapshot(); f.text = v; f.edited = true; S.dirty = true; afterFileChange("Edited by hand"); } else renderSource();
+};
+
+/* ================= side panels ================= */
+function allCreates(){
+  const map = new Map();
+  ordered().forEach(n => n.creates.forEach(c => { if (!map.has(c.name)) map.set(c.name, {name:c.name, kind:c.kind, by:[]}); map.get(c.name).by.push(n); }));
+  return [...map.values()];
+}
+function counts(){ const c = {step:0, decision:0, loop:0}; ordered().forEach(n => { if (n.kind === "decision") c.decision++; else if (n.kind === "loop") c.loop++; else if (n.kind !== "parallel") c.step++; }); return c; }
+function suggCount(){ return localChecks().length + (S.sugg.claude || []).filter(s => !S.sugg.dismissed.includes(s.id)).length; }
+function renderSummary(){
+  const m = S.model, c = counts(), gaps = suggCount();
+  $("summary").innerHTML = `<div><span class="eyebrow">Workflow</span><h2>${esc(m.title)}</h2>${m.summary ? `<p class="desc">${esc(m.summary)}</p>` : ""}${m.trigger ? `<div class="trigger"><span class="eyebrow">Runs when</span><span>${esc(m.trigger)}</span></div>` : ""}</div>
+  <div class="stats"><div class="stat s"><b>${c.step}</b><span>steps</span></div><div class="stat d"><b>${c.decision}</b><span>decisions</span></div><div class="stat l"><b>${c.loop}</b><span>repeats</span></div><div class="stat m"><b>${allCreates().length}</b><span>outputs</span></div><div class="stat g"><b>${gaps}</b><span>possible gaps</span></div></div>`;
+  $("suggBadge").hidden = !gaps; $("suggBadge").textContent = gaps;
+}
+function renderSideStatic(){
+  const mk = allCreates();
+  $("makeCount").textContent = mk.length;
+  $("makes").innerHTML = mk.length ? mk.map(c => `<li><span class="ic">${ICON_FILE}</span><span class="nm">${esc(c.name)}</span><span class="by">made in ${c.by.map(n => `<button type="button" data-id="${n.id}">step ${esc(n.num)}</button>`).join(", ")}</span></li>`).join("") : `<li class="empty">No files or outputs detected.</li>`;
+  $("inputsPanel").hidden = !S.model.inputs.length;
+  $("inputs").innerHTML = `<ul class="plain">${S.model.inputs.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`;
+  $("notesPanel").hidden = !S.model.notes.length;
+  $("notes").innerHTML = `<ul class="plain">${S.model.notes.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`;
+}
+function renderDetail(){
+  const n = S.sel && index.get(S.sel);
+  if (!n){ $("detail").innerHTML = `<h3>Step details</h3><p class="empty">Click any box in the diagram or mind map to see what it does, what it reads and what it creates. Use ← and → to walk through the steps in order.</p><div class="acts"><button class="btn sm" type="button" data-ask="overview">Ask AI to explain the whole flow</button></div>`; return; }
+  const kindName = {step:"Step", decision:"Decision", loop:"Repeats", parallel:"Parallel", stop:"Stop"}[n.kind];
+  const color = {step:"var(--step)", decision:"var(--decide)", loop:"var(--loop)", parallel:"var(--muted)", stop:"var(--ink)"}[n.kind];
+  let h = `<div class="kindline"><span class="num">${esc(n.num)}</span><span class="kind" style="color:${color}">${kindName}</span></div><h4>${esc(n.kind === "decision" ? (n.question || n.title) : n.title)}</h4>`;
+  if (n.detail) h += `<p>${esc(n.detail)}</p>`;
+  if (n.kind === "loop" && n.over) h += `<div class="blk"><span class="eyebrow">Repeats for</span><span>${esc(n.over)}</span></div>`;
+  if (n.branches) h += `<div class="blk"><span class="eyebrow">${n.kind === "parallel" ? "Tracks" : "Outcomes"}</span><ul class="plain">${n.branches.map(b => `<li><strong${b.implied ? ' style="color:var(--danger)"' : ""}>${esc(b.label)}</strong> → ${b.steps.length ? esc(b.steps.map(s => s.title).join(", then ")) : b.implied ? "not described in the file" : "continue with the next step"}</li>`).join("")}</ul></div>`;
+  if (n.creates.length) h += `<div class="blk"><span class="eyebrow">Creates</span><div class="chips">${n.creates.map(c => `<span class="chip make" title="${esc(c.note || c.kind)}">${ICON_FILE}${esc(c.name)}</span>`).join("")}</div></div>`;
+  if (n.uses.length) h += `<div class="blk"><span class="eyebrow">Reads / uses</span><div class="chips">${n.uses.map(u => `<span class="chip use">${esc(u)}</span>`).join("")}</div></div>`;
+  if (n.source) h += `<div class="blk"><span class="eyebrow">From the file</span><blockquote>${esc(n.source)}</blockquote><button type="button" class="linkbtn" id="showSrc">Show in source</button></div>`;
+  h += `<div class="acts"><button class="btn sm primary" type="button" data-ask="explain">Ask AI about this step</button><button class="btn sm" type="button" data-ask="missing">What's missing here?</button></div>`;
+  $("detail").innerHTML = h;
+  const b = $("showSrc"); if (b) b.onclick = () => { S.highlight = n.source; const fi = S.files.findIndex(f => f.text.includes(n.source.trim().slice(0, 40))); if (fi >= 0) S.activeFile = fi; setTab("source"); };
+}
+$("detail").addEventListener("click", e => {
+  const a = e.target.closest("[data-ask]"); if (!a) return;
+  const n = S.sel && index.get(S.sel);
+  if (a.dataset.ask === "overview"){ setScope(null); openChat(); sendChat("Walk me through this whole workflow in plain words: the main path, each decision point and what it produces."); return; }
+  setScope(n ? n.id : null); openChat();
+  if (a.dataset.ask === "explain") sendChat("Explain this step: what it does, why it is here, what it needs from earlier steps and what later steps depend on it.");
+  else sendChat("What is missing or unclear in this step? Think about cases where a condition is not met, inputs are missing, or something fails. List concrete gaps and propose the fix.");
+});
+
+/* ================= suggestions ================= */
+function sugCard(s){
+  const node = s.nodeId && index.get(s.nodeId);
+  return `<div class="card ${esc(s.sev)}"><div class="meta"><span class="sev ${esc(s.sev)}">${esc(s.sev)}</span><span class="cat">${esc(s.cat)}</span>${node ? `<button type="button" class="stepref" data-goto="${node.id}">step ${esc(node.num)}</button>` : ""}</div>
+  <h4>${esc(s.title)}</h4>${s.whatIf ? `<p class="whatif">${esc(s.whatIf)}</p>` : ""}${s.suggestion ? `<p class="fix">${esc(s.suggestion)}</p>` : ""}
+  <div class="acts">${sampleFn ? `<button class="btn sm primary" type="button" data-sfix="${esc(s.id)}">Fix in file</button><button class="btn sm" type="button" data-sask="${esc(s.id)}">Discuss</button>` : ""}<button class="btn sm ghost" type="button" data-sdis="${esc(s.id)}">Dismiss</button></div></div>`;
+}
+function allSugg(){ return [...localChecks(), ...(S.sugg.claude || []).filter(s => !S.sugg.dismissed.includes(s.id))]; }
+function renderSuggest(){
+  const local = localChecks(), cl = (S.sugg.claude || []).filter(s => !S.sugg.dismissed.includes(s.id));
+  const rank = {high:0, medium:1, low:2}; const sortS = a => a.slice().sort((x, y) => (rank[x.sev] ?? 3) - (rank[y.sev] ?? 3));
+  let h = `<div class="sugg-head"><p>Gaps in the workflow: conditions with only one path ("if it's there… but what if it isn't?"), missing failure handling, unclear loops and missing files. Fixes go through the chat, so you can see each change before keeping it.</p>`;
+  h += sampleFn ? `<button class="btn primary" type="button" id="suggRun">${S.sugg.claude ? "Review again with AI" : "Find gaps with AI"}</button><button class="btn" type="button" id="suggStop" hidden>Stop</button>` : `<button class="btn primary" type="button" data-open-settings>Add an API key to use AI's review</button>`;
+  h += `</div><div class="err" id="suggErr" hidden></div>`;
+  if (S.sugg.stale && S.sugg.claude) h += `<p class="empty" style="margin:0">The file changed since AI's review. Run it again for fresh results.</p>`;
+  h += `<h3>Quick checks <span class="badge n">${local.length}</span></h3>` + (local.length ? `<div class="cards">${sortS(local).map(sugCard).join("")}</div>` : `<p class="empty">No structural gaps found by the quick checks.</p>`);
+  h += `<h3>AI review <span class="badge n">${cl.length}</span></h3>` + (S.sugg.claude ? (cl.length ? `<div class="cards">${sortS(cl).map(sugCard).join("")}</div>` : `<p class="empty">No open items.</p>`) : `<p class="empty" id="suggIdle">${sampleFn ? "AI reads the whole file and lists what could go wrong: unhandled cases, missing validation, ambiguous steps and outputs nobody uses." : "Add an API key (Anthropic, OpenAI or Gemini) in AI settings to use this."}</p>`);
+  $("sugg").innerHTML = h;
+  const run = $("suggRun"); if (run) run.onclick = runSuggestions;
+  const stop = $("suggStop"); if (stop) stop.onclick = () => suggCtl?.abort();
+}
+$("sugg").addEventListener("click", e => {
+  const g = e.target.closest("[data-goto]"); if (g){ goTo(g.dataset.goto, "diagram"); return; }
+  const find = id => allSugg().find(s => s.id === id);
+  const d = e.target.closest("[data-sdis]"); if (d){ S.sugg.dismissed.push(d.dataset.sdis); save(); renderSuggest(); renderSummary(); renderDiagram(); return; }
+  const f = e.target.closest("[data-sfix]"); if (f){ const s = find(f.dataset.sfix); if (!s) return; setScope(s.nodeId || null); openChat(); sendChat(`Fix this gap in the file: ${s.title}. ${s.whatIf || ""} Suggested change: ${s.suggestion}`, {fixId:s.id}); return; }
+  const a = e.target.closest("[data-sask]"); if (a){ const s = find(a.dataset.sask); if (!s) return; setScope(s.nodeId || null); openChat(); $("chatIn").value = `About this gap: ${s.title}. ${s.whatIf || ""} `; $("chatIn").focus(); }
+});
+async function runSuggestions(){
+  if (!sampleFn) return;
+  suggCtl?.abort(); suggCtl = new AbortController(); const my = suggCtl;
+  $("suggRun").disabled = true; $("suggStop").hidden = false;
+  const idle = $("suggIdle"); if (idle) idle.textContent = "AI is reviewing the workflow…";
+  const prompt = `Review this workflow document (a Claude skill or Markdown playbook) for gaps that would make it fail or behave unpredictably when followed.
+Focus on: conditions with no "otherwise" path (it says what to do if X is present but not if it is absent), missing input validation, missing failure/error handling for scripts, tools and fetches, loops with no exit, ambiguous instructions, outputs that are created but never used or delivered, steps referenced but never defined, and missing final delivery to the user.
+
+Reply with ONLY a JSON array (max 12 items, most important first):
+[{"title":"short statement of the gap","severity":"high|medium|low","category":"Missing branch|Error handling|Validation|Ambiguity|Missing step|Output|Other","step":"step number from the outline below, or empty string","whatIf":"What happens if ...? (the unhandled scenario, one question)","suggestion":"the concrete change to make in the file, 1-2 sentences"}]
+
+Workflow outline (numbers match the diagram):
+${outlineText()}
+${filesBlock(40000)}`;
+  try {
+    const data = await sampleFn.json(prompt, {signal:my.signal, modelTier:"default", cache:false});
+    if (my !== suggCtl) return;
+    const list = arr(Array.isArray(data) ? data : data?.items || data?.suggestions);
+    S.sugg.claude = list.filter(x => x && x.title).slice(0, 15).map((x, i) => ({ id:"c-" + Date.now() + "-" + i, sev:["high","medium","low"].includes(String(x.severity).toLowerCase()) ? String(x.severity).toLowerCase() : "medium",
+      cat:String(x.category || "Other"), title:String(x.title), whatIf:String(x.whatIf || ""), suggestion:String(x.suggestion || ""), nodeId:numIndex.get(String(x.step || "").trim()) || null }));
+    S.sugg.stale = false; save();
+    renderSuggest(); renderSummary(); renderDiagram();
+  } catch(e){
+    if (my !== suggCtl) return;
+    renderSuggest();
+    if (e?.code !== "cancelled"){ const el = $("suggErr"); el.hidden = false; el.textContent = errCopy(e?.code, "AI's review failed. Try again."); }
+    if (isFatal(e?.code)) disableAI();
+  } finally { if (my === suggCtl){ const r = $("suggRun"); if (r) r.disabled = false; const s = $("suggStop"); if (s) s.hidden = true; } }
+}
+
+/* ================= selection / navigation / tabs ================= */
+function select(id, opts = {}){
+  S.sel = id;
+  document.querySelectorAll("#dInner .sel, #mLayer .mm-node.sel").forEach(e => e.classList.remove("sel"));
+  document.querySelectorAll(`#dInner [data-id="${id}"]`).forEach(e => e.classList.add("sel"));
+  const n = index.get(id);
+  if (n) { const mm = document.querySelector(`#mLayer [data-key="n:${CSS.escape(n.num)}"]`); if (mm) mm.classList.add("sel"); }
+  $("jump").value = id || "";
+  renderDetail();
+  if (S.side === "chat" || opts.scope) setScope(id);
+  else S.chatScope = id, renderScope();
+}
+function expandTo(id){ let n = index.get(id), changed = false; while (n && n.parent){ if (S.collapsed.delete(n.parent)) changed = true; n = index.get(n.parent); } return changed; }
+function goTo(id, tab){
+  if (!id) return;
+  if (tab && S.tab !== tab) setTab(tab);
+  if (expandTo(id) && S.tab === "diagram") renderDiagram();
+  select(id);
+  requestAnimationFrame(() => {
+    if (S.tab === "diagram") dView.centerOn(document.querySelector(`#dInner [data-id="${id}"]`));
+    if (S.tab === "mindmap"){ const n = index.get(id); mView.centerOn(n && document.querySelector(`#mLayer [data-key="n:${CSS.escape(n.num)}"]`)); }
+  });
+}
+function step(dir){ const list = ordered(); if (!list.length) return; const i = list.findIndex(n => n.id === S.sel); const j = i < 0 ? (dir > 0 ? 0 : list.length - 1) : Math.max(0, Math.min(list.length - 1, i + dir)); goTo(list[j].id, S.tab === "mindmap" ? "mindmap" : "diagram"); }
+$("dPrev").onclick = () => step(-1); $("dNext").onclick = () => step(1);
+$("jump").onchange = e => goTo(e.target.value, "diagram");
+$("dFit").onclick = () => dView.fit("width");
+$("dIn").onclick = () => dView.zoomBy(1.2); $("dOut").onclick = () => dView.zoomBy(1 / 1.2);
+$("dCollapse").onclick = () => { ordered().forEach(n => { if ((n.branches || n.kind === "loop") && n.parent) S.collapsed.add(n.id); }); renderDiagram(); dView.fit("width"); };
+$("dExpand").onclick = () => { S.collapsed.clear(); renderDiagram(); };
+document.addEventListener("click", e => {
+  const f = e.target.closest("[data-fold]");
+  if (f){ e.stopPropagation(); const id = f.dataset.fold; if (S.collapsed.has(id)) S.collapsed.delete(id); else S.collapsed.add(id); renderDiagram(); requestAnimationFrame(() => dView.centerOn(document.querySelector(`#dInner [data-id="${id}"]`))); return; }
+  const t = e.target.closest("[data-id]");
+  if (t && (t.closest("#dInner") || t.closest("#view-outline") || t.closest("#makes"))){
+    if (t.closest("#dInner")) select(t.dataset.id); else goTo(t.dataset.id, "diagram");
+  }
+  const fl = e.target.closest("[data-file]"); if (fl){ S.activeFile = +fl.dataset.file; S.highlight = null; S.editing = false; renderSource(); }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape"){ $("modal").hidden = true; if (document.body.classList.contains("focus")) toggleFocus(false); return; }
+  if (e.target.closest("input,textarea,select")) return;
+  if (e.key === "Enter" && e.target.matches("[data-id][role=button]")){ select(e.target.dataset.id); return; }
+  if (S.tab !== "diagram" && S.tab !== "mindmap") return;
+  if (e.key === "ArrowRight" || e.key === "j"){ e.preventDefault(); step(1); }
+  else if (e.key === "ArrowLeft" || e.key === "k"){ e.preventDefault(); step(-1); }
+  else if (e.key === "f"){ (S.tab === "diagram" ? dView : mView).fit(S.tab === "diagram" ? "width" : "all"); }
+});
+function setTab(t){
+  S.tab = t;
+  document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
+  ["diagram","mindmap","suggest","outline","source"].forEach(v => $("view-" + v).hidden = v !== t);
+  if (t === "mindmap"){ renderMindmap(); if (!S.fitted.mindmap) requestAnimationFrame(() => { S.fitted.mindmap = mView.fitMin(0.6, document.querySelector('#mLayer [data-key="root"]')); }); }
+  if (t === "diagram" && !S.fitted.diagram) requestAnimationFrame(() => { S.fitted.diagram = dView.fit("width"); });
+  if (t === "source") renderSource();
+  if (t === "suggest") renderSuggest();
+}
+document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+function setSide(s){
+  S.side = s;
+  document.querySelectorAll("[data-side]").forEach(b => b.setAttribute("aria-selected", b.dataset.side === s));
+  $("side-details").hidden = s !== "details"; $("side-chat").hidden = s !== "chat";
+  if (s === "chat"){ $("chatBadge").hidden = true; renderChat(); }
+}
+document.querySelectorAll("[data-side]").forEach(b => b.onclick = () => setSide(b.dataset.side));
+const openChat = () => setSide("chat");
+function toggleFocus(on){ document.body.classList.toggle("focus", on); document.querySelectorAll(".focusBtn").forEach(b => b.textContent = on ? "Exit focus" : "Focus"); requestAnimationFrame(() => { if (S.tab === "diagram") dView.fit("width"); if (S.tab === "mindmap") mView.fit("all"); }); }
+document.querySelectorAll(".focusBtn").forEach(b => b.onclick = () => toggleFocus(!document.body.classList.contains("focus")));
+
+/* ================= mermaid ================= */
+function toMermaid(){
+  const lines = ["flowchart TD"]; let k = 0;
+  const lab = s => '"' + String(s).replace(/"/g, "#quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;").slice(0, 110) + '"';
+  const link = (prev, id) => prev.forEach(p => lines.push(`  ${p.id} -->${p.label ? "|" + lab(p.label) + "|" : ""} ${id}`));
+  function emit(nodes, prev){
+    nodes.forEach(n => {
+      const id = "N" + (++k);
+      if (n.branches){ lines.push(`  ${id}{${lab(n.num + " " + (n.question || n.title))}}`); link(prev, id); let ends = []; n.branches.forEach(b => { ends = ends.concat(b.steps.length ? emit(b.steps, [{id, label:b.label}]) : [{id, label:b.label}]); }); prev = ends; }
+      else if (n.kind === "loop"){ lines.push(`  ${id}[/${lab(n.num + " Repeat: " + n.title + (n.over ? " (" + n.over + ")" : ""))}/]`); link(prev, id); emit(n.steps, [{id}]).forEach(e => lines.push(`  ${e.id} -.->|"next"| ${id}`)); prev = [{id, label:"done"}]; }
+      else { lines.push(`  ${id}[${lab(n.num + " " + n.title + (n.creates.length ? " | creates: " + n.creates.map(c => c.name).join(", ") : ""))}]`); link(prev, id); prev = [{id}]; }
+    });
+    return prev;
+  }
+  lines.push(`  S((${lab("Start")}))`);
+  const ends = emit(S.model.steps, [{id:"S"}]);
+  lines.push(`  E((${lab("Done")}))`); link(ends, "E");
+  return lines.join("\n");
+}
+$("mermaidBtn").onclick = async () => { try { await navigator.clipboard.writeText(toMermaid()); toast("Mermaid code copied"); } catch(e){ toast("The clipboard is blocked in this view."); } };
+function toast(msg){ const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 2800); }
+
+/* ================= files, history, download ================= */
+function snapshot(){ S.history.push({files:S.files.map(f => ({...f})), rawModel:S.rawModel, mode:S.mode}); if (S.history.length > 25) S.history.shift(); $("undoBtn").disabled = false; }
+function undo(){
+  const h = S.history.pop(); if (!h) return;
+  S.files = h.files; S.rawModel = h.rawModel; S.mode = h.mode;
+  S.model = normalize(S.rawModel || quickParse(S.files));
+  S.dirty = S.files.some(f => f.edited);
+  $("undoBtn").disabled = !S.history.length;
+  S.sugg.stale = true; setStatus(S.mode === "claude" ? "claude" : "quick", "Change undone");
+  renderAll(); save(); toast("Undid the last change");
+}
+$("undoBtn").onclick = undo;
+function realFiles(){ return S.files.filter(f => !f.virtual); }
+function fileName(f){ let b = f.path.split("/").pop(); if (!/\.(md|txt)$/i.test(b)) b = b.replace(/\.(mdx|markdown)$/i, "") + ".md"; return b; }
+function updateDl(){
+  const rf = realFiles(); const f = rf[0];
+  $("dlLabel").textContent = "Download " + (f ? fileName(f) : ".md");
+  $("dlZipBtn").hidden = rf.length < 2 || !window.JSZip;
+  $("dirtyDot").hidden = !S.dirty;
+}
+function offer(filename, data){
+  const blob = data instanceof Blob ? data : new Blob([data], {type:"text/markdown;charset=utf-8"});
+  const url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  toast("Downloaded " + filename);
+}
+$("dlBtn").onclick = () => { const f = realFiles()[0]; if (f) offer(fileName(f), f.text); };
+$("dlZipBtn").onclick = async () => { const zip = new JSZip(); realFiles().forEach(f => zip.file(f.path, f.text)); const blob = await zip.generateAsync({type:"blob"}); offer((S.model.title || "skill").replace(/[^\w.-]+/g, "-") + ".zip", blob); };
+
+function setStatus(mode, text){ const s = $("status"); s.className = "status " + mode; $("statusText").textContent = text; }
+function showErr(msg){ $("err").hidden = !msg; $("err").textContent = msg || ""; }
+async function readFiles(fileList){
+  const out = [];
+  for (const f of fileList){
+    if (/\.(zip|skill)$/i.test(f.name)){
+      if (!window.JSZip){ showErr("Zip support did not load. Upload the SKILL.md file directly."); continue; }
+      const zip = await JSZip.loadAsync(f);
+      const all = Object.values(zip.files).filter(z => !z.dir && !/(^|\/)(__MACOSX|\.DS_Store)/.test(z.name));
+      const texts = all.filter(z => /\.(md|mdx|markdown|txt)$/i.test(z.name));
+      texts.sort((a, b) => (/skill\.md$/i.test(b.name) - /skill\.md$/i.test(a.name)) || a.name.localeCompare(b.name));
+      for (const z of texts.slice(0, 25)) out.push({path:z.name, text:await z.async("string")});
+      const others = all.filter(z => !texts.includes(z)).map(z => z.name);
+      if (others.length) out.push({path:"(other files in zip)", text:others.join("\n"), virtual:true});
+    } else out.push({path:f.name, text:await f.text()});
+  }
+  return out;
+}
+function resetForNewFile(){ S.sel = null; S.chatScope = null; S.highlight = null; S.collapsed.clear(); S.history = []; S.dirty = false; S.chat = []; S.links = []; S.mmPos = {}; S.mmLink = null; S.sugg = {claude:null, stale:false, dismissed:[]}; S.editing = false; S.fitted = {diagram:false, mindmap:false}; $("undoBtn").disabled = true; }
+async function load(files){
+  showErr("");
+  files = files.filter(f => f.text && f.text.trim());
+  if (!files.filter(f => !f.virtual).length){ showErr("That file is empty or not text. Upload a .md, .txt, or a zipped skill folder."); return; }
+  files.sort((a, b) => (!!a.virtual - !!b.virtual) || (/(^|\/)skill\.md$/i.test(b.path) - /(^|\/)skill\.md$/i.test(a.path)));
+  resetForNewFile();
+  S.files = files; S.activeFile = 0; S.rawModel = null;
+  S.model = normalize(quickParse(files)); S.mode = "quick";
+  setStatus("quick", "Quick map (approximate)");
+  renderAll(); setTab("diagram"); save();
+  if (sampleFn && $("aiToggle").checked) analyze();
+}
+function afterFileChange(why){
+  S.sugg.stale = true;
+  if (sampleFn && $("aiToggle").checked){ renderSource(); updateDl(); save(); analyze(true); }
+  else { S.rawModel = null; S.model = normalize(quickParse(S.files)); S.mode = "quick"; setStatus("quick", why + " · quick map"); renderAll(); save(); }
+}
+$("uploadBtn").onclick = () => $("fileInput").click();
+$("fileInput").onchange = async e => { const fl = [...e.target.files]; e.target.value = ""; if (fl.length) load(await readFiles(fl)); };
+["dragenter","dragover"].forEach(ev => document.addEventListener(ev, e => { if (e.dataTransfer?.types?.includes("Files")){ e.preventDefault(); $("drop").classList.add("over"); } }));
+["dragleave","drop"].forEach(ev => document.addEventListener(ev, e => { if (ev === "drop" || !e.relatedTarget) $("drop").classList.remove("over"); }));
+document.addEventListener("drop", async e => { const fl = [...(e.dataTransfer?.files || [])]; if (fl.length){ e.preventDefault(); load(await readFiles(fl)); } });
+$("pasteBtn").onclick = () => { $("modal").hidden = false; $("pasteArea").focus(); };
+$("pasteCancel").onclick = () => $("modal").hidden = true;
+$("pasteGo").onclick = () => { const t = $("pasteArea").value; if (!t.trim()) return; $("modal").hidden = true; $("pasteArea").value = ""; load([{path:"pasted.md", text:t}]); };
+
+/* ================= AI: mapping ================= */
+function filesBlock(budget){
+  let doc = "";
+  for (const f of S.files){ const chunk = `\n\n===== FILE: ${f.path} =====\n${f.text}`; if (doc.length + chunk.length > budget){ doc += chunk.slice(0, Math.max(0, budget - doc.length)) + "\n[truncated]"; break; } doc += chunk; }
+  return doc;
+}
+const FATAL = [];
+const isFatal = c => { if (c === "invalid_key" || c === "no_key" || c === "model_not_found") setTimeout(openSettings, 50); return FATAL.includes(c); };
+function errCopy(code, fallback){ return ({rate_limited:"Too many requests right now. Wait a minute and try again.", prompt_too_large:"The file is too large for one request. Upload SKILL.md on its own.", invalid_json:"AI's answer couldn't be read. Try again.", session_expired:"Your session expired. Sign in again, then retry.", refused:"AI declined this request.", invalid_key:"The API key was rejected. Check it in AI settings.", no_key:"Add an API key in AI settings first.", overloaded:"AI is overloaded right now. Try again shortly.", model_not_found:"That model isn't available for your key. Pick another in AI settings.", network:"Couldn't reach the AI provider. Check your connection, or the provider may not allow calls from this site.", quota:"This key has no credit or quota left. Check billing with your provider.", truncated_empty:"The model used its whole output budget before answering. Try a different model.", bad_request:"The API rejected the request. Try a different model in AI settings."}[code]) || fallback; }
+function disableAI(){ sampleFn = null; $("aiBtn").hidden = true; $("aiToggleWrap").hidden = true; renderChat(); renderSuggest(); }
+function mapPrompt(){
+  return `You are mapping the workflow described in a Claude skill (SKILL.md plus any referenced files) or another Markdown instruction document, so a reader can understand the complete flow in one diagram.
+
+Reply with ONLY one JSON object, no prose, in this shape:
+{"title":"skill or workflow name","summary":"one sentence: what this workflow accomplishes","trigger":"when/why it runs","inputs":["things that must exist or be provided before starting"],"notes":["global rules that apply to every step (max 8)"],"steps":[NODE,...]}
+NODE is one of:
+ {"kind":"step","title":"...","detail":"...","creates":[{"name":"...","kind":"file|data|message|artifact|other","note":"..."}],"uses":["..."],"source":"..."}
+ {"kind":"decision","title":"short label","question":"the question being decided?","detail":"...","source":"...","branches":[{"label":"outcome","implied":false,"steps":[NODE,...]}]}
+ {"kind":"loop","title":"...","over":"what it repeats for / until when","detail":"...","source":"...","steps":[NODE,...]}
+ {"kind":"parallel","title":"...","branches":[{"label":"track","steps":[NODE,...]}]}
+ {"kind":"stop","title":"why the workflow ends early","source":"..."}
+
+Rules:
+- Cover every step in execution order, including setup, validation and final delivery.
+- Use a decision node for ANY branching: if/when/otherwise/unless/depending on/for type X do Y. One branch per outcome. If the text only describes one outcome, still add the other outcome as a branch with "implied": true and empty steps, so the reader sees it is not described.
+- Steps that only happen for one outcome go INSIDE that branch; steps for all outcomes come after the decision.
+- loop for repetition; parallel only when the text says steps run independently.
+- "creates" = concrete things the step produces, with exact file names from the text. "uses" = scripts, tools, commands, reference files, templates, and earlier outputs the step reads (use the same names as in "creates" so the data flow is visible).
+- title: imperative, max 7 words. detail: 1-2 plain sentences. source: a short VERBATIM quote (max 140 chars) from the text.
+- If a referenced file defines a sub-procedure the main flow calls, nest it where it is called.
+- Max nesting depth 5, under 60 nodes.
+
+Document:
+${filesBlock(48000)}`;
+}
+async function analyze(afterEdit){
+  if (!sampleFn) return;
+  mapCtl?.abort(); mapCtl = new AbortController(); const my = mapCtl;
+  showErr(""); setStatus("busy", afterEdit ? "File changed · AI is redrawing the map…" : "AI is reading the file…");
+  $("aiBtn").disabled = true; $("stopBtn").hidden = false;
+  try {
+    const data = await sampleFn.json(mapPrompt(), { signal:my.signal, modelTier:"default",
+      onText:({text}) => { if (my === mapCtl) setStatus("busy", `AI is mapping the flow… ${(text.length / 1000).toFixed(1)}k chars`); } });
+    if (my !== mapCtl) return;
+    if (!data || !Array.isArray(data.steps) || !data.steps.length) throw {code:"invalid_json"};
+    const prevNum = S.sel && index.get(S.sel)?.num;
+    S.rawModel = data; S.model = normalize(data); S.mode = "claude";
+    S.sel = prevNum && numIndex.get(prevNum) || null; S.chatScope = S.chatScope && S.sel;
+    S.collapsed.clear();
+    setStatus("claude", afterEdit ? "Map updated by AI" : "Mapped by AI"); renderAll(); save();
+  } catch(e){
+    if (my !== mapCtl) return;
+    const code = e?.code;
+    if (afterEdit){ S.rawModel = null; S.model = normalize(quickParse(S.files)); S.mode = "quick"; renderAll(); save(); }
+    if (code === "cancelled") setStatus("quick", "Quick map (AI stopped)");
+    else { setStatus("quick", "Quick map"); showErr(errCopy(code, "AI mapping failed. The quick map is shown; you can try again.")); if (isFatal(code)) disableAI(); }
+  } finally { if (my === mapCtl){ $("aiBtn").disabled = false; $("stopBtn").hidden = true; } }
+}
+$("aiBtn").onclick = () => analyze();
+$("stopBtn").onclick = () => mapCtl?.abort();
+
+/* ================= AI: chat ================= */
+function setScope(id){ S.chatScope = id || null; renderScope(); }
+function renderScope(){
+  const n = S.chatScope && index.get(S.chatScope);
+  const pill = $("scopePill");
+  pill.className = "scope-pill" + (n ? "" : " all");
+  pill.textContent = n ? `Step ${n.num} · ${n.kind === "decision" ? (n.question || n.title) : n.title}` : "Whole workflow";
+  $("scopeAll").hidden = !n;
+  renderQuick();
+}
+$("scopeAll").onclick = () => setScope(null);
+function renderQuick(){
+  const n = S.chatScope && index.get(S.chatScope);
+  const items = n ? ["Explain this step", "What if this fails?", "What's missing here?", "Make this step clearer"] : ["Summarize the flow", "Where can this go wrong?", "Add error handling", "Tighten the wording"];
+  $("quick").innerHTML = sampleFn ? items.map(t => `<button type="button" data-q="${esc(t)}">${esc(t)}</button>`).join("") : "";
+}
+$("quick").addEventListener("click", e => { const b = e.target.closest("[data-q]"); if (b) sendChat(b.dataset.q); });
+function md(s){
+  const lines = esc(s).split("\n"); let h = "", list = null, code = false, buf = [];
+  const inline = t => t.replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  const close = () => { if (list){ h += `</${list}>`; list = null; } };
+  lines.forEach(l => {
+    if (/^\s*```/.test(l)){ if (code){ h += `<pre>${buf.join("\n")}</pre>`; buf = []; code = false; } else { close(); code = true; } return; }
+    if (code){ buf.push(l); return; }
+    let m;
+    if ((m = l.match(/^\s*[-*]\s+(.*)/))){ if (list !== "ul"){ close(); h += "<ul>"; list = "ul"; } h += `<li>${inline(m[1])}</li>`; }
+    else if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))){ if (list !== "ol"){ close(); h += "<ol>"; list = "ol"; } h += `<li>${inline(m[1])}</li>`; }
+    else if ((m = l.match(/^#{1,4}\s+(.*)/))){ close(); h += `<p><strong>${inline(m[1])}</strong></p>`; }
+    else if (l.trim()){ close(); h += `<p>${inline(l)}</p>`; }
+    else close();
+  });
+  close(); if (code) h += `<pre>${buf.join("\n")}</pre>`;
+  return h;
+}
+function diffHtml(ed){
+  const cut = (s) => { const ls = s.split("\n"); return ls.length > 14 ? [...ls.slice(0, 14), `… ${ls.length - 14} more lines`] : ls; };
+  return ed.map(x => `<div class="f">${esc(x.file)}${x.ok ? "" : " · could not find this text"}</div>` + (x.find ? cut(x.find).map(l => `<div class="del">- ${esc(l)}</div>`).join("") : "") + (x.replace ? cut(x.replace).map(l => `<div class="add">+ ${esc(l)}</div>`).join("") : "")).join("");
+}
+function renderMsg(m, i){
+  if (m.role === "user") return `<div class="msg user" data-msg="${i}">${m.scope ? `<span class="sc">about step ${esc(m.scope.num)} · ${esc(m.scope.title)}</span>` : ""}${esc(m.text)}</div>`;
+  let body = m.pending && !m.text ? `<span class="typing"><i></i><i></i><i></i> ${m.phase === "edits" ? "Preparing changes" : "Thinking"}</span>` : md(m.text);
+  if (m.pending && m.text && m.phase === "edits") body += `<p class="typing"><i></i><i></i><i></i> Preparing changes</p>`;
+  if (m.edits && m.edits.length){
+    const okN = (m.results || []).filter(r => r.ok).length, bad = (m.results || []).length - okN;
+    const state = m.status === "applied" ? `<span class="ok">Applied ${okN} change${okN === 1 ? "" : "s"}</span>${bad ? ` <span class="bad">· ${bad} not found</span>` : ""}` : m.status === "undone" ? "Undone" : m.status === "discarded" ? "Discarded" : m.status === "failed" ? `<span class="bad">Couldn't apply: the text to replace wasn't found</span>` : `Proposed ${m.edits.length} change${m.edits.length === 1 ? "" : "s"}`;
+    const btns = m.status === "proposed" ? `<button class="btn sm primary" type="button" data-apply="${i}">Apply</button><button class="btn sm" type="button" data-discard="${i}">Discard</button>` : m.status === "applied" && m.snap === S.history.length ? `<button class="btn sm" type="button" data-undo="${i}">Undo</button>` : "";
+    body += `<div class="change"><div class="change-h">${state}<span class="sp"></span>${btns}</div><div class="diff">${diffHtml(m.results || m.edits.map(x => ({...x, ok:true})))}</div></div>`;
+  }
+  return `<div class="msg assistant${m.error ? " error" : ""}" data-msg="${i}">${body}</div>`;
+}
+function renderChat(){
+  const tip = sampleFn ? `<div class="msg tip">Select a step in the diagram to talk about it, or keep "Whole workflow". Ask questions, or say what to change, such as "if the ticket isn't found, ask the user again". Changes are written into the file and the map redraws. Undo and Download are at the top.</div>` : `<div class="msg tip">Chat needs an API key from Anthropic, OpenAI or Google Gemini. <button class="btn sm primary" type="button" data-open-settings>Add API key</button></div>`;
+  $("msgs").innerHTML = tip + S.chat.map(renderMsg).join("");
+  $("msgs").scrollTop = $("msgs").scrollHeight;
+  $("chatSend").disabled = !sampleFn; $("chatIn").disabled = !sampleFn;
+  renderScope();
+}
+function updateMsg(i){ const el = document.querySelector(`[data-msg="${i}"]`); if (el){ el.outerHTML = renderMsg(S.chat[i], i); $("msgs").scrollTop = $("msgs").scrollHeight; } else renderChat(); }
+function chatInstructions(scope){
+  return `You are a workflow editor built into "Skill Flow Mapper". The user sees a diagram of the workflow described in the files below (a Claude skill or Markdown playbook) and is chatting with you about it.
+
+How to answer:
+- Be concise and concrete. Refer to steps by the numbers in the outline (for example "step 2a.1"). Short paragraphs or bullets.
+- When a message starts with [Scope], focus on that step but keep the whole flow in mind.
+- When the user asks you to change, fix, add, remove, rename, reword or rewrite anything in the file, or agrees to a change you proposed, make the change: write 1-3 sentences on what you changed, then append exactly one fenced block like this:
+${FENCE}edits
+[{"file":"<path exactly as in the FILE header>","find":"<exact text copied from the current file>","replace":"<new text>"}]
+${FENCE}
+- "find" must be copied character for character from the CURRENT file below, must be unique in that file, and should cover whole lines. To insert, use a nearby line as "find" and put that line plus the new lines in "replace". To delete, use an empty "replace". Several small edits are better than one huge edit.
+- Keep the file's existing style, headings and numbering; renumber later steps if you insert one.
+- Do not include an edits block when the user only asks a question. Put nothing after the edits block.
+
+Workflow outline (numbers match the diagram):
+${outlineText()}
+${scope ? `\nSelected step ${scope.num}: ${scope.kind} "${scope.kind === "decision" ? scope.question || scope.title : scope.title}". Detail: ${scope.detail || "-"}. Source text: "${scope.source || "-"}"\n` : ""}
+Current files:${filesBlock(38000)}`;
+}
+function parseReply(text){
+  const i = text.indexOf(FENCE + "edits");
+  if (i < 0) return {display:text.trim(), edits:null, open:false};
+  const rest = text.slice(i + FENCE.length + 5);
+  const j = rest.indexOf(FENCE);
+  const body = j >= 0 ? rest.slice(0, j) : rest;
+  let edits = null;
+  if (j >= 0){ try { edits = JSON.parse(body.trim()); } catch(e){ const a = body.indexOf("["), b = body.lastIndexOf("]"); if (a >= 0 && b > a){ try { edits = JSON.parse(body.slice(a, b + 1)); } catch(_){} } } }
+  return {display:text.slice(0, i).trim(), edits:Array.isArray(edits) ? edits.filter(x => x && typeof x.find === "string" && typeof x.replace === "string") : null, open:j < 0};
+}
+async function sendChat(text, opts = {}){
+  text = String(text || "").trim();
+  if (!text || !sampleFn) return;
+  $("chatErr").hidden = true;
+  const scope = S.chatScope && index.get(S.chatScope);
+  const history = S.chat.filter(m => !m.pending && !m.error).slice(-10);
+  S.chat.push({role:"user", text, scope:scope ? {num:scope.num, title:scope.kind === "decision" ? scope.question || scope.title : scope.title} : null});
+  const ai = {role:"assistant", text:"", pending:true};
+  S.chat.push(ai); const idx = S.chat.length - 1;
+  renderChat(); if (S.side !== "chat") $("chatBadge").hidden = false, $("chatBadge").textContent = "new";
+  chatCtl?.abort(); chatCtl = new AbortController(); const my = chatCtl;
+  $("chatStop").hidden = false; $("chatSend").disabled = true;
+  const turns = [{role:"user", content:chatInstructions(scope)}];
+  let budget = 12000;
+  const hist = [];
+  for (let k = history.length - 1; k >= 0; k--){ const m = history[k]; const c = m.role === "user" ? (m.scope ? `[Scope: step ${m.scope.num} "${m.scope.title}"] ` : "") + m.text : (m.text || "(no text)") + (m.status === "applied" ? "\n[These edits were applied to the file.]" : m.edits ? "\n[Edits proposed but not applied.]" : ""); budget -= c.length; if (budget < 0) break; hist.unshift({role:m.role, content:c}); }
+  while (hist.length && hist[0].role === "assistant") hist.shift();
+  if (hist.length) turns.push({role:"assistant", content:"Understood. I have the outline and the current files."}, ...hist);
+  turns.push({role:"user", content:(scope ? `[Scope: step ${scope.num} "${scope.kind === "decision" ? scope.question || scope.title : scope.title}"] ` : "[Scope: whole workflow] ") + text});
+  try {
+    const res = await sampleFn(turns, { signal:my.signal, cache:false, modelTier:"default",
+      onText:({text:t}) => { const p = parseReply(t); ai.text = p.display; ai.phase = t.includes(FENCE + "edits") ? "edits" : ""; updateMsg(idx); } });
+    const p = parseReply(res.text);
+    ai.text = p.display || (p.edits ? "Here are the changes." : res.text); ai.pending = false;
+    if (p.edits && p.edits.length){ ai.edits = p.edits; ai.status = "proposed"; if ($("autoApply").checked) applyMsg(idx, false); }
+    if (res.truncated) ai.text += "\n\n(The answer was cut short. Ask for a smaller change.)";
+    updateMsg(idx); save();
+  } catch(e){
+    ai.pending = false;
+    if (e?.code === "cancelled"){ ai.text = (e.text ? parseReply(e.text).display + "\n\n" : "") + "(Stopped)"; }
+    else { ai.error = true; ai.text = (e?.text ? parseReply(e.text).display + "\n\n" : "") + errCopy(e?.code, "AI couldn't answer. Try again."); if (isFatal(e?.code)) disableAI(); }
+    updateMsg(idx); save();
+  } finally { if (my === chatCtl){ $("chatStop").hidden = true; $("chatSend").disabled = !sampleFn; } }
+}
+function applyEdit(text, find, replace){
+  if (find === "") return null;
+  const i = text.indexOf(find);
+  if (i >= 0) return text.slice(0, i) + replace + text.slice(i + find.length);
+  const pat = find.trim().split(/\s+/).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+");
+  if (!pat) return null;
+  const m = text.match(new RegExp(pat));
+  if (m) return text.slice(0, m.index) + replace.trim() + text.slice(m.index + m[0].length);
+  return null;
+}
+function applyMsg(i, rerender = true){
+  const m = S.chat[i]; if (!m || !m.edits) return;
+  const before = S.files.map(f => ({...f}));
+  const results = m.edits.map(ed => {
+    let f = S.files.find(x => x.path === ed.file) || S.files.find(x => ed.file && x.path.endsWith(ed.file.replace(/^\.?\//, ""))) || S.files.find(x => !x.virtual && x.text.includes(ed.find)) || realFiles()[0];
+    if (!f || f.virtual) return {...ed, ok:false};
+    const out = applyEdit(f.text, ed.find, ed.replace);
+    if (out == null) return {...ed, file:f.path, ok:false};
+    f.text = out; f.edited = true; return {...ed, file:f.path, ok:true};
+  });
+  m.results = results;
+  if (!results.some(r => r.ok)){ S.files = before; m.status = "failed"; if (rerender) updateMsg(i); save(); return; }
+  const cur = S.files; S.files = before; snapshot(); S.files = cur;
+  m.status = "applied"; m.snap = S.history.length; S.dirty = true;
+  if (rerender) updateMsg(i);
+  toast("File updated · redrawing the map");
+  afterFileChange("File updated");
+}
+$("msgs").addEventListener("click", e => {
+  const a = e.target.closest("[data-apply]"); if (a){ applyMsg(+a.dataset.apply); return; }
+  const d = e.target.closest("[data-discard]"); if (d){ S.chat[+d.dataset.discard].status = "discarded"; updateMsg(+d.dataset.discard); save(); return; }
+  const u = e.target.closest("[data-undo]"); if (u){ const m = S.chat[+u.dataset.undo]; if (m.snap === S.history.length){ undo(); m.status = "undone"; renderChat(); save(); } }
+});
+$("chatSend").onclick = () => { const v = $("chatIn").value; $("chatIn").value = ""; sendChat(v); };
+$("chatIn").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); $("chatSend").click(); } });
+$("chatStop").onclick = () => chatCtl?.abort();
+
+
+/* ================= AI providers (bring your own key) ================= */
+const PROVIDERS = {
+  anthropic:{label:"Anthropic (Claude)", short:"Claude", keyHint:"sk-ant-...", keyUrl:"https://console.anthropic.com/settings/keys", keySite:"console.anthropic.com", host:"api.anthropic.com"},
+  openai:{label:"OpenAI (ChatGPT)", short:"OpenAI", keyHint:"sk-...", keyUrl:"https://platform.openai.com/api-keys", keySite:"platform.openai.com", host:"api.openai.com"},
+  gemini:{label:"Google Gemini", short:"Gemini", keyHint:"AIza...", keyUrl:"https://aistudio.google.com/app/apikey", keySite:"aistudio.google.com", host:"generativelanguage.googleapis.com"}
+};
+const API = {provider:"anthropic", keys:{}, models:{}, remember:false};
+const curKey = () => API.keys[API.provider] || "", curModel = () => API.models[API.provider] || "";
+
+function mapErr(status, msg, extra){
+  msg = String(msg || "").toLowerCase(); extra = String(extra || "").toLowerCase();
+  if (extra.includes("insufficient_quota") || msg.includes("exceeded your current quota") || msg.includes("credit balance")) return "quota";
+  if (status === 401 || status === 403 || msg.includes("api key not valid") || msg.includes("invalid api key") || msg.includes("incorrect api key") || extra.includes("api_key_invalid")) return "invalid_key";
+  if (status === 429 || extra === "resource_exhausted") return "rate_limited";
+  if (status === 413 || msg.includes("prompt is too long") || msg.includes("too many tokens") || msg.includes("context length") || msg.includes("context_length")) return "prompt_too_large";
+  if (status === 404 || msg.includes("model:") || msg.includes("does not exist") || msg.includes("not found for api version")) return "model_not_found";
+  if (status === 529 || status === 503 || msg.includes("overloaded")) return "overloaded";
+  if (status === 400) return "bad_request";
+  return "upstream_error";
+}
+function parseJsonLoose(t){
+  const tries = [t.trim()];
+  const f = t.match(/```(?:json)?\s*\n([\s\S]*?)```/); if (f) tries.push(f[1].trim());
+  const a = Math.min(...["{","["].map(c => t.indexOf(c)).filter(i => i >= 0)), b = Math.max(t.lastIndexOf("}"), t.lastIndexOf("]"));
+  if (isFinite(a) && b > a) tries.push(t.slice(a, b + 1));
+  for (const s of tries){ try { return JSON.parse(s); } catch(e){} }
+  return undefined;
+}
+function toMessages(input){
+  const turns = typeof input === "string" ? [{role:"user", content:input}] : input;
+  const out = [];
+  turns.forEach(t => { const c = String(t.content || ""); if (!c) return; const last = out[out.length - 1]; if (last && last.role === t.role) last.content += "\n\n" + c; else out.push({role:t.role, content:c}); });
+  while (out.length && out[0].role !== "user") out.shift();
+  return out;
+}
+async function readSSE(res, onData, signal){
+  const reader = res.body.getReader(), dec = new TextDecoder(); let buf = "";
+  const flush = ev => { const data = ev.split(/\r?\n/).filter(l => l.startsWith("data:")).map(l => l.slice(5).trim()).join(""); if (!data || data === "[DONE]") return; let d; try { d = JSON.parse(data); } catch(_){ return; } onData(d); };
+  for (;;){
+    const {done, value} = await reader.read();
+    if (done){ if (buf.trim()) flush(buf); break; }
+    buf += dec.decode(value, {stream:true}).replace(/\r\n/g, "\n");
+    let i; while ((i = buf.indexOf("\n\n")) >= 0){ const ev = buf.slice(0, i); buf = buf.slice(i + 2); flush(ev); }
+  }
+}
+async function errFrom(res){
+  let msg = "", extra = "";
+  try { const j = await res.json(); const e = Array.isArray(j) ? j[0]?.error : j.error; msg = e?.message || ""; extra = e?.code || e?.status || e?.type || ""; if (e?.details) extra += " " + JSON.stringify(e.details); } catch(_){}
+  return {code:mapErr(res.status, msg, extra), message:msg, status:res.status};
+}
+const REQ = {
+  anthropic:(key, model, messages, maxTokens) => ({url:"https://api.anthropic.com/v1/messages",
+    headers:{"content-type":"application/json", "x-api-key":key, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true"},
+    body:{model, max_tokens:maxTokens, messages, stream:true},
+    parse:(d, st) => { if (d.type === "content_block_delta" && d.delta?.type === "text_delta") return d.delta.text; if (d.type === "message_delta") st.stop = d.delta?.stop_reason === "max_tokens" ? "len" : st.stop; if (d.type === "error") throw {code:mapErr(0, d.error?.message, d.error?.type), message:d.error?.message}; return ""; }}),
+  openai:(key, model, messages, maxTokens, alt) => ({url:"https://api.openai.com/v1/chat/completions",
+    headers:{"content-type":"application/json", "authorization":"Bearer " + key},
+    body:Object.assign({model, messages, stream:true}, alt ? {max_tokens:maxTokens} : {max_completion_tokens:maxTokens}),
+    parse:(d, st) => { if (d.error) throw {code:mapErr(0, d.error.message, d.error.code), message:d.error.message}; const c = d.choices?.[0]; if (c?.finish_reason === "length") st.stop = "len"; return c?.delta?.content || ""; }}),
+  gemini:(key, model, messages, maxTokens) => ({url:`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
+    headers:{"content-type":"application/json", "x-goog-api-key":key},
+    body:{contents:messages.map(m => ({role:m.role === "assistant" ? "model" : "user", parts:[{text:m.content}]})), generationConfig:{maxOutputTokens:maxTokens}},
+    parse:(d, st) => { if (d.error) throw {code:mapErr(d.error.code, d.error.message, d.error.status), message:d.error.message}; const c = d.candidates?.[0]; if (c?.finishReason === "MAX_TOKENS") st.stop = "len"; if (d.promptFeedback?.blockReason) throw {code:"refused"}; return (c?.content?.parts || []).filter(p => !p.thought && p.text).map(p => p.text).join(""); }})
+};
+function makeApiSample(){
+  async function call(input, opts = {}, maxTokens = 16000, alt = false){
+    const key = curKey(), model = curModel(), provider = API.provider;
+    if (!key) throw {code:"no_key"};
+    if (!model) throw {code:"model_not_found"};
+    const r = REQ[provider](key, model, toMessages(input), maxTokens, alt);
+    let res;
+    try { res = await fetch(r.url, {method:"POST", signal:opts.signal, headers:r.headers, body:JSON.stringify(r.body)}); }
+    catch(e){ throw {code:e?.name === "AbortError" ? "cancelled" : "network", message:String(e)}; }
+    if (!res.ok){
+      const e = await errFrom(res);
+      if (provider === "openai" && !alt && /max_completion_tokens/i.test(e.message) && /unsupported|not supported|unrecognized/i.test(e.message)) return call(input, opts, maxTokens, true);
+      if (e.code === "bad_request" && maxTokens > 8192 && /token/i.test(e.message)) return call(input, opts, 8192, alt);
+      throw e;
+    }
+    let text = ""; const st = {stop:null};
+    try {
+      await readSSE(res, d => { const t = r.parse(d, st); if (t){ text += t; opts.onText && opts.onText({text, delta:t}); } });
+    } catch(e){ if (e?.name === "AbortError") throw {code:"cancelled", text}; throw e?.code ? Object.assign(e, {text}) : {code:"upstream_error", text}; }
+    if (!text.trim()) throw {code:st.stop === "len" ? "truncated_empty" : "empty_completion"};
+    return {text, truncated:st.stop === "len"};
+  }
+  const fn = (input, opts) => call(input, opts);
+  fn.json = async (input, opts = {}) => {
+    const withRule = typeof input === "string" ? input + "\n\nRespond with only the JSON value. No prose before or after it, no code fences." : input;
+    const r = await call(withRule, opts);
+    const v = parseJsonLoose(r.text);
+    if (v === undefined) throw {code:"invalid_json", text:r.text};
+    return v;
+  };
+  return fn;
+}
+async function listModels(provider, key){
+  let r;
+  const H = {anthropic:{url:"https://api.anthropic.com/v1/models?limit=100", headers:{"x-api-key":key, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true"}},
+             openai:{url:"https://api.openai.com/v1/models", headers:{"authorization":"Bearer " + key}},
+             gemini:{url:"https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000", headers:{"x-goog-api-key":key}}}[provider];
+  try { r = await fetch(H.url, {headers:H.headers}); } catch(e){ throw {code:"network"}; }
+  if (!r.ok) throw await errFrom(r);
+  const j = await r.json();
+  if (provider === "anthropic") return (j.data || []).map(m => ({id:m.id, name:m.display_name || m.id}));
+  if (provider === "openai"){
+    const skip = /(audio|realtime|tts|transcribe|embedding|image|search|dall-e|whisper|moderation|instruct|babbage|davinci|computer-use|codex)/i;
+    return (j.data || []).filter(m => /^(gpt-|o\d|chatgpt-)/i.test(m.id) && !skip.test(m.id)).sort((a, b) => (b.created || 0) - (a.created || 0)).map(m => ({id:m.id, name:m.id}));
+  }
+  const skip = /(embedding|image|tts|audio|live|aqa|vision|native-audio)/i;
+  return (j.models || []).filter(m => (m.supportedGenerationMethods || []).includes("generateContent") && /gemini/i.test(m.name) && !skip.test(m.name))
+    .map(m => ({id:m.name.replace(/^models\//, ""), name:m.displayName || m.name})).sort((a, b) => b.id.localeCompare(a.id, undefined, {numeric:true}));
+}
+function preferModel(provider, models){
+  const by = re => models.find(m => re.test(m.id));
+  if (provider === "anthropic") return by(/sonnet/i) || models[0];
+  if (provider === "openai") return by(/^gpt-\d(\.\d+)?$/i) || by(/^gpt-\d/i) || models[0];
+  return by(/^gemini-[\d.]+-flash$/i) || by(/flash(?!.*(lite|preview|exp))/i) || by(/flash/i) || models[0];
+}
+function loadSettings(){
+  try {
+    const s = JSON.parse(localStorage.getItem("skillflow:ai") || "{}");
+    API.provider = PROVIDERS[s.provider] ? s.provider : "anthropic";
+    API.models = s.models || {}; API.remember = !!(s.keys && Object.keys(s.keys).length);
+    API.keys = s.keys || JSON.parse(sessionStorage.getItem("skillflow:keys") || "{}");
+    const old = JSON.parse(localStorage.getItem("skillflow:api") || "null");
+    if (old && !s.provider){ if (old.key){ API.keys.anthropic = old.key; API.remember = true; } if (old.model) API.models.anthropic = old.model; localStorage.removeItem("skillflow:api"); }
+  } catch(e){}
+}
+function persistSettings(){
+  try {
+    const keys = Object.fromEntries(Object.entries(API.keys).filter(([, v]) => v));
+    localStorage.setItem("skillflow:ai", JSON.stringify({provider:API.provider, models:API.models, keys:API.remember ? keys : {}}));
+    if (API.remember || !Object.keys(keys).length) sessionStorage.removeItem("skillflow:keys"); else sessionStorage.setItem("skillflow:keys", JSON.stringify(keys));
+  } catch(e){}
+}
+function applyKeyState(){
+  const on = !!(curKey() && curModel());
+  sampleFn = on ? makeApiSample() : null;
+  $("keyBtn").classList.toggle("on", on);
+  $("keyLabel").textContent = on ? `${PROVIDERS[API.provider].short}: ${curModel().replace(/^(claude-|models\/)/, "")}` : curKey() ? "Choose a model" : "Add API key";
+  $("aiBtn").hidden = !on; $("aiToggleWrap").hidden = !on;
+  renderChat(); if (S.tab === "suggest") renderSuggest();
+}
+/* settings dialog: edits a draft, saved on Save */
+let draft = null;
+function fillModels(models, current){
+  const sel = $("modelSel");
+  sel.innerHTML = models.length ? models.map(m => `<option value="${esc(m.id)}">${esc(m.name === m.id ? m.id : m.name + " (" + m.id + ")")}</option>`).join("") : `<option value="">No models returned</option>`;
+  const pick = models.find(m => m.id === current) || preferModel(draft.provider, models);
+  if (pick) sel.value = pick.id;
+}
+function setMsg(t, cls){ const m = $("setMsg"); m.textContent = t || ""; m.className = "msgline " + (cls || ""); }
+function showProvider(){
+  const pv = PROVIDERS[draft.provider];
+  $("provSel").value = draft.provider;
+  $("keyTitle").textContent = pv.label + " API key";
+  $("apiKey").placeholder = pv.keyHint; $("apiKey").value = draft.keys[draft.provider] || ""; $("apiKey").type = "password"; $("showKey").textContent = "Show";
+  $("provNote").innerHTML = `Chat, AI mapping and gap review call ${esc(pv.label)} directly from your browser with your own key. The key is sent only to <span class="mono">${esc(pv.host)}</span>; this site has no server. Get a key at <a href="${pv.keyUrl}" target="_blank" rel="noopener">${esc(pv.keySite)}</a>.` + (draft.provider === "gemini" ? " Gemini has a free tier; on it, Google may use prompts to improve its products, so avoid confidential files." : draft.provider === "openai" ? " A ChatGPT Plus subscription does not include API usage; the API is billed separately." : " Set a spend limit on the key.");
+  const m = draft.models[draft.provider] || "";
+  $("modelSel").innerHTML = m ? `<option value="${esc(m)}">${esc(m)}</option>` : `<option value="">Test the key to load your models</option>`;
+  $("modelCustom").value = "";
+  setMsg(draft.keys[draft.provider] ? "" : "Paste your key, then press Test key to load the models it can use.");
+}
+function stash(){ if (!draft) return; draft.keys[draft.provider] = $("apiKey").value.trim(); const m = $("modelCustom").value.trim() || $("modelSel").value; if (m) draft.models[draft.provider] = m; }
+function openSettings(){
+  draft = {provider:API.provider, keys:{...API.keys}, models:{...API.models}};
+  $("rememberKey").checked = API.remember;
+  showProvider();
+  $("settings").hidden = false; $("apiKey").focus();
+}
+$("keyBtn").onclick = openSettings;
+document.addEventListener("click", e => { if (e.target.closest("[data-open-settings]")) openSettings(); });
+$("provSel").onchange = e => { stash(); draft.provider = e.target.value; showProvider(); };
+$("showKey").onclick = () => { const i = $("apiKey"); i.type = i.type === "password" ? "text" : "password"; $("showKey").textContent = i.type === "password" ? "Show" : "Hide"; };
+$("loadModels").onclick = async () => {
+  const key = $("apiKey").value.trim();
+  if (!key){ setMsg("Paste a key first.", "bad"); return; }
+  setMsg("Checking the key…"); $("loadModels").disabled = true;
+  try { const models = await listModels(draft.provider, key); fillModels(models, draft.models[draft.provider]); setMsg(`Key works. ${models.length} models available.`, "ok"); }
+  catch(e){ setMsg(errCopy(e.code, "Couldn't check the key."), "bad"); }
+  finally { $("loadModels").disabled = false; }
+};
+$("setSave").onclick = () => {
+  stash();
+  if (draft.keys[draft.provider] && !draft.models[draft.provider]){ setMsg("Press Test key to load models, or type a model ID.", "bad"); return; }
+  API.provider = draft.provider; API.keys = draft.keys; API.models = draft.models; API.remember = $("rememberKey").checked;
+  persistSettings(); applyKeyState();
+  $("settings").hidden = true;
+  toast(curKey() ? `Using ${PROVIDERS[API.provider].label}` : "Settings saved");
+};
+$("forgetKey").onclick = () => { draft.keys[draft.provider] = ""; $("apiKey").value = ""; API.keys[draft.provider] = ""; persistSettings(); applyKeyState(); setMsg("This key was removed from this browser.", "ok"); };
+$("setCancel").onclick = () => { $("settings").hidden = true; };
+document.addEventListener("keydown", e => { if (e.key === "Escape") $("settings").hidden = true; });
+
+/* ================= render all / persistence ================= */
+function renderAll(){
+  renderSummary(); renderDiagram(); renderOutline(); renderSideStatic(); renderDetail(); updateDl(); renderScope();
+  if (S.tab === "mindmap") renderMindmap();
+  if (S.tab === "source") renderSource();
+  if (S.tab === "suggest") renderSuggest();
+  if (S.side === "chat") renderChat();
+}
+let saveT = null;
+function save(){ clearTimeout(saveT); saveT = setTimeout(() => {
+  store.set("skillflow:v2", JSON.stringify({ files:S.files.slice(0, 26).map(f => ({path:f.path, text:f.text.slice(0, 80000), edited:!!f.edited, virtual:!!f.virtual})), rawModel:S.rawModel, mode:S.mode, dirty:S.dirty,
+    chat:S.chat.filter(m => !m.pending).slice(-40).map(m => ({role:m.role, text:m.text, scope:m.scope, edits:m.edits, results:m.results, status:m.status === "applied" ? "applied-old" : m.status, error:m.error})),
+    links:S.links, mmPos:S.mmPos, sugg:S.sugg }));
+}, 400); }
+
+$("themeBtn").onclick = () => { const r = document.documentElement, cur = r.getAttribute("data-theme"); const dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; r.setAttribute("data-theme", dark ? "light" : "dark"); };
+
+(function boot(){
+  let restored = false;
+  try {
+    const d = JSON.parse(store.get("skillflow:v2") || "null");
+    if (d && d.files?.length){
+      S.files = d.files; S.rawModel = d.rawModel || null; S.mode = d.rawModel ? "claude" : "quick"; S.dirty = !!d.dirty;
+      S.model = normalize(S.rawModel || quickParse(S.files));
+      S.chat = (d.chat || []).map(m => ({...m, status:m.status === "applied-old" ? "applied" : m.status, snap:-1}));
+      S.links = d.links || []; S.mmPos = d.mmPos || {}; S.sugg = d.sugg || {claude:null, stale:false, dismissed:[]};
+      setStatus(S.mode === "claude" ? "claude" : "quick", S.mode === "claude" ? "Mapped by AI · last file" : "Quick map · last file");
+      restored = true;
+    }
+  } catch(e){}
+  if (!restored){ S.rawModel = EXAMPLE_MODEL; S.model = normalize(EXAMPLE_MODEL); S.mode = "claude"; setStatus("example", "Example · upload your own file"); }
+  renderAll();
+  requestAnimationFrame(() => { S.fitted.diagram = dView.fit("width"); });
+  loadSettings(); applyKeyState();
+  renderChat(); setSide("details");
+})();
+})();
+</script>
+
+</body>
+</html>
