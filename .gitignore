@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# Local environment and secrets (never commit API keys)
+.env
+.env.*
+
+# Deploy tool state (Netlify, Vercel, Cloudflare)
+.netlify/
+.vercel/
+.wrangler/
+
+# Test output
+coverage/
+
+# Editors and OS files
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db

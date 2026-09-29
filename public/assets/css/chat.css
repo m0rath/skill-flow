@@ -1,0 +1,226 @@
+/* chat */
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 520px;
+}
+.scopebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+.scope-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--step);
+  color: var(--step);
+  background: var(--step-bg);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-weight: 500;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scope-pill.all {
+  border-color: var(--line);
+  color: var(--muted);
+  background: var(--surface-2);
+}
+.msgs {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.msg {
+  max-width: 94%;
+  font-size: 13.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.msg.user {
+  align-self: flex-end;
+  background: var(--step);
+  color: var(--surface);
+  padding: 8px 12px;
+  border-radius: 12px 12px 3px 12px;
+}
+.msg.user .sc {
+  display: block;
+  font-size: 11px;
+  opacity: 0.8;
+  margin-bottom: 2px;
+}
+.msg.assistant {
+  align-self: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  padding: 9px 12px;
+  border-radius: 12px 12px 12px 3px;
+}
+.msg.tip {
+  align-self: stretch;
+  max-width: none;
+  color: var(--muted);
+  font-size: 13px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.msg.error {
+  color: var(--danger);
+}
+.msg p {
+  margin: 0 0 6px;
+}
+.msg p:last-child {
+  margin: 0;
+}
+.msg ul,
+.msg ol {
+  margin: 4px 0 6px;
+  padding-left: 18px;
+}
+.msg code {
+  font: 12px var(--mono);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.msg pre {
+  font: 12px/1.5 var(--mono);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.typing {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.typing i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: pulse 1s infinite;
+}
+.typing i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.typing i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+.change {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.change-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 600;
+  flex-wrap: wrap;
+}
+.change-h .ok {
+  color: var(--make);
+}
+.change-h .bad {
+  color: var(--danger);
+}
+.change-h .sp {
+  flex: 1;
+}
+.diff {
+  font: 11.5px/1.5 var(--mono);
+  max-height: 220px;
+  overflow: auto;
+}
+.diff .f {
+  padding: 3px 8px;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-top: 1px solid var(--line);
+}
+.diff .f:first-child {
+  border-top: 0;
+}
+.diff .del,
+.diff .add {
+  padding: 0 8px;
+  white-space: pre-wrap;
+}
+.diff .del {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.diff .add {
+  background: var(--make-bg);
+  color: var(--make);
+}
+.quick {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 8px 12px 0;
+}
+.quick button {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.quick button:hover {
+  color: var(--ink);
+  border-color: var(--wire);
+}
+.composer {
+  padding: 8px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.composer textarea {
+  width: 100%;
+  min-height: 64px;
+  max-height: 180px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 8px 10px;
+  resize: vertical;
+  font-size: 13.5px;
+}
+.composer .row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.composer .row .grow {
+  flex: 1;
+}

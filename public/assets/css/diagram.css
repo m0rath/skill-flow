@@ -1,0 +1,337 @@
+/* flow diagram */
+.flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.wire {
+  width: 2px;
+  min-height: 22px;
+  background: var(--wire);
+  position: relative;
+  flex: none;
+}
+.wire.arrow::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top: 6px solid var(--wire);
+  border-bottom: 0;
+}
+.wire.grow {
+  flex: 1 1 auto;
+}
+.term {
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 12.5px;
+  max-width: 340px;
+  text-align: center;
+}
+.term .eyebrow {
+  display: block;
+  margin-bottom: 3px;
+}
+.term.end {
+  background: var(--ink);
+  color: var(--surface);
+}
+.term.end .eyebrow {
+  color: var(--surface);
+  opacity: 0.7;
+}
+.node {
+  width: 272px;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align: left;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+.node:hover {
+  border-color: var(--wire);
+}
+.node.sel,
+.loophead.sel,
+.parhead.sel {
+  box-shadow: 0 0 0 4px var(--ring);
+  border-color: var(--step);
+}
+.node.flag::after {
+  content: "!";
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: var(--surface);
+  font: 700 12px/18px var(--sans);
+  text-align: center;
+}
+.node .top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.num {
+  font: 500 11px var(--mono);
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-variant-numeric: tabular-nums;
+}
+.kind {
+  font: 600 10.5px var(--sans);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.fold {
+  margin-left: auto;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 5px;
+  font: 600 11px/1 var(--sans);
+  padding: 3px 6px;
+  color: var(--muted);
+}
+.fold:hover {
+  color: var(--ink);
+  border-color: var(--wire);
+}
+.node h3 {
+  margin: 0;
+  font: 600 14.5px/1.3 var(--sans);
+  text-wrap: balance;
+}
+.node p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.node.step {
+  border-left: 4px solid var(--step);
+}
+.node.step .kind {
+  color: var(--step);
+}
+.node.decision {
+  background: var(--decide-bg);
+  border-color: color-mix(in srgb, var(--decide) 45%, var(--line));
+}
+.node.decision .kind {
+  color: var(--decide);
+}
+.diamond {
+  width: 12px;
+  height: 12px;
+  background: var(--decide);
+  transform: rotate(45deg);
+  border-radius: 2px;
+  flex: none;
+}
+.node.stop {
+  border-left: 4px solid var(--ink);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 500 11px/1.3 var(--mono);
+  padding: 2px 6px;
+  border-radius: 5px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.chip.make {
+  background: var(--make-bg);
+  color: var(--make);
+  border: 1px solid color-mix(in srgb, var(--make) 30%, transparent);
+}
+.chip.use {
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+.chip svg {
+  flex: none;
+}
+.chiprow {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.chiprow .lbl {
+  font-size: 10.5px;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex: none;
+  width: 34px;
+}
+.branches {
+  display: flex;
+  align-items: stretch;
+}
+.branch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 14px;
+  position: relative;
+}
+.branch::before,
+.branch::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--wire);
+}
+.branch::before {
+  top: 0;
+}
+.branch::after {
+  bottom: 0;
+}
+.branch:first-child::before,
+.branch:first-child::after {
+  left: 50%;
+}
+.branch:last-child::before,
+.branch:last-child::after {
+  right: 50%;
+}
+.branch:only-child::before,
+.branch:only-child::after {
+  display: none;
+}
+.blabel {
+  font: 600 11.5px/1.2 var(--sans);
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1.5px solid var(--decide);
+  color: var(--decide);
+  background: var(--surface);
+  max-width: 240px;
+  text-align: center;
+}
+.blabel.par {
+  border-color: var(--wire);
+  color: var(--muted);
+}
+.blabel.implied {
+  border-style: dashed;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.skip {
+  font-size: 12px;
+  color: var(--faint);
+  font-style: italic;
+  padding: 4px 0;
+}
+.skip.implied {
+  color: var(--danger);
+  font-style: normal;
+  font-weight: 500;
+}
+.merge {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--wire);
+}
+.loop {
+  border: 1.5px dashed var(--loop);
+  background: color-mix(in srgb, var(--loop-bg) 70%, transparent);
+  border-radius: 14px;
+  padding: 0 18px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 300px;
+}
+.loophead {
+  margin-top: -13px;
+  background: var(--surface);
+  border: 1.5px solid var(--loop);
+  color: var(--loop);
+  border-radius: 999px;
+  padding: 4px 8px 4px 12px;
+  font: 600 12px/1.3 var(--sans);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  max-width: 360px;
+  text-align: left;
+}
+.loophead .num {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--loop) 40%, transparent);
+  color: var(--loop);
+}
+.loophead .fold {
+  margin-left: 6px;
+}
+.loopback {
+  align-self: flex-end;
+  font: 500 11px var(--sans);
+  color: var(--loop);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+.parhead {
+  font: 600 11px var(--sans);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1.5px solid var(--wire);
+  border-radius: 6px;
+  padding: 3px 9px;
+  cursor: pointer;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.folded {
+  border: 1.5px dashed var(--wire);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.folded:hover {
+  color: var(--ink);
+  border-color: var(--step);
+}

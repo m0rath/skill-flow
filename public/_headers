@@ -1,0 +1,15 @@
+# Security headers for Netlify and Cloudflare Pages.
+# Keep the Content-Security-Policy in sync with the <meta> tag in index.html.
+# frame-ancestors only works as a real header, so it is set here and not in the <meta> tag.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin
+
+/assets/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/vendor/*
+  Cache-Control: public, max-age=31536000, immutable

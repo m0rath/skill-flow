@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- Keep in sync with public/_headers. AI providers you add must be listed in connect-src. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      name="description"
+      content="Upload a Claude skill or Markdown playbook to see its workflow as a diagram and mind map, find gaps, and fix the file with AI (Claude, ChatGPT or Gemini)."
+    />
+    <meta name="theme-color" content="#F2F4F6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0E1318" media="(prefers-color-scheme: dark)" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Skill Flow Mapper" />
+    <meta
+      property="og:description"
+      content="Upload a Claude skill or Markdown playbook to see its workflow as a diagram and mind map, find gaps, and fix the file with AI (Claude, ChatGPT or Gemini)."
+    />
+    <!-- Link previews (Slack, X, LinkedIn…) need an absolute image URL: replace og-image.png with the full deployed URL. -->
+    <meta property="og:image" content="og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <title>Skill Flow Mapper</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="assets/fonts/ibm-plex-sans-var.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="assets/css/fonts.css" />
+    <link rel="stylesheet" href="assets/css/base.css" />
+    <link rel="stylesheet" href="assets/css/layout.css" />
+    <link rel="stylesheet" href="assets/css/diagram.css" />
+    <link rel="stylesheet" href="assets/css/mindmap.css" />
+    <link rel="stylesheet" href="assets/css/panels.css" />
+    <link rel="stylesheet" href="assets/css/chat.css" />
+    <script src="vendor/jszip.min.js" defer></script>
+    <script type="module" src="assets/js/main.js"></script>
+  </head>
+  <body>
+    <noscript><p class="noscript">Skill Flow Mapper needs JavaScript to run.</p></noscript>
+
+    <main class="wrap">
+      <header class="bar">
+        <div class="brand">
+          <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+            <rect x="1" y="1" width="12" height="8" rx="2" fill="none" stroke="var(--step)" stroke-width="2" />
+            <path d="M7 9v5" stroke="var(--wire)" stroke-width="2" />
+            <rect x="7" y="14" width="8" height="8" rx="1.5" transform="rotate(45 7 18)" fill="var(--decide)" />
+            <path d="M12 18h6M7 23v4" stroke="var(--wire)" stroke-width="2" />
+            <rect x="17" y="14" width="12" height="8" rx="2" fill="none" stroke="var(--loop)" stroke-width="2" />
+          </svg>
+          <div>
+            <h1>Skill Flow Mapper</h1>
+            <p>Map, question and fix a Claude skill or Markdown playbook.</p>
+          </div>
+        </div>
+        <button class="btn keybtn" id="keyBtn" type="button" title="AI provider, API key and model">
+          <span class="kdot"></span><span id="keyLabel">Add API key</span>
+        </button>
+        <button class="btn" id="undoBtn" type="button" disabled title="Undo the last change to the file">Undo</button>
+        <button class="btn primary" id="dlBtn" type="button">
+          <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+            <path
+              d="M8 2v9M4 7l4 4 4-4M2 14h12"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            /></svg
+          ><span id="dlLabel">Download .md</span><span class="dotmark" id="dirtyDot" hidden></span>
+        </button>
+        <button class="btn" id="dlZipBtn" type="button" hidden>Download .zip</button>
+        <button class="btn ghost" id="themeBtn" type="button">Theme</button>
+      </header>
+
+      <section class="drop" id="drop">
+        <button class="btn" id="uploadBtn" type="button">
+          <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+            <path
+              d="M8 11V2M4 6l4-4 4 4M2 14h12"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            /></svg
+          >Upload file
+        </button>
+        <input
+          type="file"
+          id="fileInput"
+          accept=".md,.markdown,.txt,.mdx,.zip,.skill,text/markdown,text/plain,application/zip"
+          multiple
+          hidden
+        />
+        <button class="btn" id="pasteBtn" type="button">Paste text</button>
+        <div class="hint">
+          <strong>SKILL.md, any .md, or a zipped skill folder.</strong> Drop it anywhere on the page.
+        </div>
+        <label class="toggle" id="aiToggleWrap" hidden
+          ><input type="checkbox" id="aiToggle" checked /> Map with AI</label
+        >
+        <span class="status example" id="status"
+          ><span class="dot"></span><span id="statusText">Example loaded</span></span
+        >
+        <button class="btn sm" id="aiBtn" type="button" hidden>Re-map with AI</button>
+        <button class="btn sm" id="stopBtn" type="button" hidden>Stop</button>
+      </section>
+      <div class="err" id="err" hidden></div>
+
+      <section class="summary" id="summary"></section>
+
+      <div class="main">
+        <section class="panel" aria-label="Workflow">
+          <div class="tabs" role="tablist" aria-label="Views">
+            <button
+              class="tab"
+              role="tab"
+              data-tab="diagram"
+              aria-selected="true"
+              aria-controls="view-diagram"
+              type="button"
+            >
+              Diagram
+            </button>
+            <button
+              class="tab"
+              role="tab"
+              data-tab="mindmap"
+              aria-selected="false"
+              aria-controls="view-mindmap"
+              type="button"
+            >
+              Mind map
+            </button>
+            <button
+              class="tab"
+              role="tab"
+              data-tab="suggest"
+              aria-selected="false"
+              aria-controls="view-suggest"
+              type="button"
+            >
+              Suggestions <span class="badge" id="suggBadge" hidden>0</span>
+            </button>
+            <button
+              class="tab"
+              role="tab"
+              data-tab="outline"
+              aria-selected="false"
+              aria-controls="view-outline"
+              type="button"
+            >
+              Outline
+            </button>
+            <button
+              class="tab"
+              role="tab"
+              data-tab="source"
+              aria-selected="false"
+              aria-controls="view-source"
+              type="button"
+            >
+              Source
+            </button>
+            <button
+              class="tab"
+              role="tab"
+              data-tab="changes"
+              aria-selected="false"
+              aria-controls="view-changes"
+              type="button"
+            >
+              Changes <span class="badge n chg" id="chgBadge" hidden></span>
+            </button>
+          </div>
+
+          <div id="view-diagram" role="tabpanel">
+            <div class="toolbar">
+              <button class="ib" id="dFit" type="button" title="Fit to width">Fit</button>
+              <div class="zoom">
+                <button class="ib" id="dOut" type="button" aria-label="Zoom out">&minus;</button
+                ><span class="zval" id="dZ">100%</span
+                ><button class="ib" id="dIn" type="button" aria-label="Zoom in">+</button>
+              </div>
+              <span class="sep"></span>
+              <button class="ib" id="dPrev" type="button" title="Previous step (←)">&larr;</button>
+              <select class="jump" id="jump" aria-label="Jump to step"></select>
+              <button class="ib" id="dNext" type="button" title="Next step (→)">&rarr;</button>
+              <span class="sep"></span>
+              <button class="ib" id="dCollapse" type="button">Collapse all</button>
+              <button class="ib" id="dExpand" type="button">Expand all</button>
+              <span class="grow"></span>
+              <details class="menu">
+                <summary class="ib" title="Save the whole diagram as an image">Export</summary>
+                <div class="menu-pop">
+                  <button type="button" data-export="png" data-view="diagram">PNG image</button>
+                  <button type="button" data-export="svg" data-view="diagram">SVG image</button>
+                  <button type="button" id="mermaidBtn">Copy Mermaid code</button>
+                </div>
+              </details>
+              <button class="ib focusBtn" type="button">Focus</button>
+            </div>
+            <div class="viewport" id="dVp"><div class="vp-inner diagram-inner" id="dInner"></div></div>
+          </div>
+
+          <div id="view-mindmap" role="tabpanel" hidden>
+            <div class="toolbar">
+              <button class="ib" id="mFit" type="button">Fit</button>
+              <div class="zoom">
+                <button class="ib" id="mOut" type="button" aria-label="Zoom out">&minus;</button
+                ><span class="zval" id="mZ">100%</span
+                ><button class="ib" id="mIn" type="button" aria-label="Zoom in">+</button>
+              </div>
+              <span class="sep"></span>
+              <button class="ib" id="mOuts" type="button" aria-pressed="true">Outputs</button>
+              <button class="ib" id="mUses" type="button" aria-pressed="false">Tools &amp; files</button>
+              <button class="ib" id="mFlow" type="button" aria-pressed="true">Data links</button>
+              <button class="ib" id="mReset" type="button" title="Put every box back in its automatic position">
+                Reset layout
+              </button>
+              <span class="grow"></span>
+              <button class="ib" id="mAsk" type="button" disabled>Ask AI about my links</button>
+              <details class="menu">
+                <summary class="ib" title="Save the whole mind map as an image">Export</summary>
+                <div class="menu-pop">
+                  <button type="button" data-export="png" data-view="mindmap">PNG image</button>
+                  <button type="button" data-export="svg" data-view="mindmap">SVG image</button>
+                </div>
+              </details>
+              <button class="ib focusBtn" type="button">Focus</button>
+            </div>
+            <div class="toolbar">
+              <div class="legend">
+                <span><i style="border-color: var(--wire)"></i>Structure</span
+                ><span><i style="border-color: var(--make); border-top-style: dashed"></i>Data passes (auto)</span
+                ><span><i style="border-color: var(--link); border-top-width: 3px"></i>Your links</span>
+              </div>
+              <span class="grow"></span
+              ><span class="hintline"
+                >Scroll to pan, Ctrl + scroll to zoom. Drag boxes to arrange. Drag from a pink dot onto another box to
+                connect them.</span
+              >
+            </div>
+            <div class="linkbar" id="linkBar" hidden>
+              <strong>Link</strong><span id="linkDesc"></span>
+              <input id="linkLabel" type="text" placeholder="Label, e.g. needs output of" aria-label="Link label" />
+              <button class="btn sm" id="linkAsk" type="button">Ask AI</button>
+              <button class="btn sm" id="linkDel" type="button">Delete</button>
+              <button class="btn sm ghost" id="linkClose" type="button">Done</button>
+            </div>
+            <div class="viewport" id="mVp">
+              <div class="vp-inner" id="mInner"><div class="mm-layer" id="mLayer"></div></div>
+            </div>
+          </div>
+
+          <div id="view-suggest" class="scroll" role="tabpanel" hidden><div class="sugg" id="sugg"></div></div>
+          <div id="view-outline" class="scroll outline" role="tabpanel" hidden></div>
+          <div id="view-changes" class="scroll" role="tabpanel" hidden><div class="changes" id="changes"></div></div>
+          <div id="view-source" class="source" role="tabpanel" hidden>
+            <div class="filetabs">
+              <span id="fileTabs" style="display: contents"></span><span style="flex: 1"></span>
+              <button class="btn sm" id="editBtn" type="button">Edit</button>
+              <button class="btn sm primary" id="saveEdit" type="button" hidden>Save &amp; re-map</button>
+              <button class="btn sm" id="cancelEdit" type="button" hidden>Cancel</button>
+            </div>
+            <div class="scroll" id="srcWrap">
+              <pre id="srcPre"></pre>
+              <textarea id="srcEdit" hidden aria-label="Edit file" spellcheck="false"></textarea>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel side">
+          <div class="tabs" role="tablist" aria-label="Side panel">
+            <button
+              class="tab"
+              role="tab"
+              data-side="details"
+              aria-selected="true"
+              aria-controls="side-details"
+              type="button"
+            >
+              Details
+            </button>
+            <button
+              class="tab"
+              role="tab"
+              data-side="chat"
+              aria-selected="false"
+              aria-controls="side-chat"
+              type="button"
+            >
+              Chat with AI <span class="badge n" id="chatBadge" hidden></span>
+            </button>
+          </div>
+          <div class="side-body" id="side-details" role="tabpanel">
+            <section class="sec detail" id="detail" aria-live="polite"></section>
+            <section class="sec">
+              <h3>What it creates <span class="badge n" id="makeCount">0</span></h3>
+              <ul class="makes" id="makes"></ul>
+            </section>
+            <section class="sec" id="inputsPanel">
+              <h3>Needs before starting</h3>
+              <div id="inputs"></div>
+            </section>
+            <section class="sec" id="notesPanel">
+              <h3>Rules that apply throughout</h3>
+              <div id="notes"></div>
+            </section>
+          </div>
+          <div class="side-body chat" id="side-chat" role="tabpanel" hidden>
+            <div class="scopebar">
+              <span class="eyebrow">Talking about</span><span class="scope-pill all" id="scopePill">Whole workflow</span
+              ><button class="linkbtn" id="scopeAll" type="button" hidden>Use whole workflow</button>
+            </div>
+            <div class="msgs" id="msgs"></div>
+            <div class="quick" id="quick"></div>
+            <div class="composer">
+              <textarea
+                id="chatIn"
+                placeholder="Ask about the flow, or say what to fix. Example: add a step to validate the ticket ID"
+              ></textarea>
+              <div class="row">
+                <label class="toggle"
+                  ><input type="checkbox" id="autoApply" checked /> Apply fixes to the file automatically</label
+                ><span class="grow"></span><button class="btn sm" id="chatStop" type="button" hidden>Stop</button
+                ><button class="btn sm primary" id="chatSend" type="button">Send</button>
+              </div>
+              <div class="err" id="chatErr" hidden></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <div class="modal" id="modal" hidden>
+      <div class="box" role="dialog" aria-modal="true" aria-labelledby="pasteTitle">
+        <strong id="pasteTitle">Paste Markdown</strong>
+        <textarea
+          id="pasteArea"
+          placeholder="Paste the contents of a SKILL.md or any Markdown workflow here"
+        ></textarea>
+        <div class="row">
+          <button class="btn" id="pasteCancel" type="button">Cancel</button
+          ><button class="btn primary" id="pasteGo" type="button">Map workflow</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal" id="settings" hidden>
+      <div
+        class="box settings"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="setTitle"
+        style="width: min(580px, 100%)"
+      >
+        <strong id="setTitle">AI settings</strong>
+        <label class="f" for="provSel"
+          >Provider
+          <select id="provSel">
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="openai">OpenAI (ChatGPT)</option>
+            <option value="gemini">Google Gemini</option>
+          </select>
+        </label>
+        <p class="note" id="provNote"></p>
+        <label class="f" for="apiKey"
+          ><span id="keyTitle">API key</span>
+          <span class="inrow"
+            ><input type="password" id="apiKey" autocomplete="off" spellcheck="false" /><button
+              class="btn sm"
+              type="button"
+              id="showKey"
+            >
+              Show
+            </button></span
+          >
+        </label>
+        <label class="toggle" style="color: var(--ink)"
+          ><input type="checkbox" id="rememberKey" /> Remember keys on this device (stored in this browser's local
+          storage)</label
+        >
+        <label class="f" for="modelSel"
+          >Model
+          <span class="inrow"
+            ><select id="modelSel">
+              <option value="">Test the key to load your models</option></select
+            ><button class="btn sm" type="button" id="loadModels">Test key</button></span
+          >
+        </label>
+        <label class="f" for="modelCustom"
+          >Or type a model ID <input type="text" id="modelCustom" spellcheck="false" placeholder="Model ID"
+        /></label>
+        <div class="msgline" id="setMsg"></div>
+        <div class="row">
+          <button class="btn" type="button" id="forgetKey">Remove this key</button><span style="flex: 1"></span
+          ><button class="btn" type="button" id="setCancel">Cancel</button
+          ><button class="btn primary" type="button" id="setSave">Save</button>
+        </div>
+      </div>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>
