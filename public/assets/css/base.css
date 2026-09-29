@@ -1,0 +1,122 @@
+/* Design tokens: colors, fonts and shadows, with light and dark values */
+:root {
+  --paper: #f2f4f6;
+  --surface: #ffffff;
+  --surface-2: #f7f9fa;
+  --ink: #15202b;
+  --muted: #586574;
+  --faint: #626e7b;
+  --line: #d3dae1;
+  --wire: #9aa7b4;
+  --step: #1f55c4;
+  --step-bg: #eef3fd;
+  --decide: #a05e00;
+  --decide-bg: #fff5e6;
+  --loop: #0a7a6d;
+  --loop-bg: #e8f6f3;
+  --make: #3a7419;
+  --make-bg: #edf6e6;
+  --link: #c2366b;
+  --danger: #b42318;
+  --danger-bg: #fdecea;
+  --ring: rgba(31, 85, 196, 0.35);
+  --shadow: 0 1px 2px rgba(21, 32, 43, 0.06), 0 2px 8px rgba(21, 32, 43, 0.05);
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --cond: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0e1318;
+    --surface: #161d25;
+    --surface-2: #1b232c;
+    --ink: #e4e9ef;
+    --muted: #9aa6b3;
+    --faint: #838f9c;
+    --line: #29333e;
+    --wire: #4b5866;
+    --step: #79a2ff;
+    --step-bg: #17223a;
+    --decide: #f2a93b;
+    --decide-bg: #2a2012;
+    --loop: #43c7b4;
+    --loop-bg: #112823;
+    --make: #86cb62;
+    --make-bg: #172715;
+    --link: #f27aa8;
+    --danger: #ff7b6e;
+    --danger-bg: #3a1714;
+    --ring: rgba(121, 162, 255, 0.4);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0e1318;
+  --surface: #161d25;
+  --surface-2: #1b232c;
+  --ink: #e4e9ef;
+  --muted: #9aa6b3;
+  --faint: #838f9c;
+  --line: #29333e;
+  --wire: #4b5866;
+  --step: #79a2ff;
+  --step-bg: #17223a;
+  --decide: #f2a93b;
+  --decide-bg: #2a2012;
+  --loop: #43c7b4;
+  --loop-bg: #112823;
+  --make: #86cb62;
+  --make-bg: #172715;
+  --link: #f27aa8;
+  --danger: #ff7b6e;
+  --danger-bg: #3a1714;
+  --ring: rgba(121, 162, 255, 0.4);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+html {
+  color-scheme: light;
+}
+
+/* Base elements */
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font: 14px/1.5 var(--sans);
+}
+.wrap {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding-inline: 20px;
+  padding-block: 14px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 2px solid var(--step);
+  outline-offset: 2px;
+}
+.mono {
+  font-family: var(--mono);
+}
+body {
+  margin: 0;
+}

@@ -1,0 +1,43 @@
+{
+  "name": "skill-flow-mapper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "See a Claude skill or Markdown playbook as a diagram and mind map, find gaps, and fix the file with AI.",
+  "keywords": [
+    "claude",
+    "skills",
+    "agent-skills",
+    "workflow",
+    "diagram",
+    "mind-map",
+    "markdown",
+    "llm"
+  ],
+  "homepage": "https://github.com/m0rath/skill-flow#readme",
+  "bugs": {
+    "url": "https://github.com/m0rath/skill-flow/issues"
+  },
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/m0rath/skill-flow.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "node --test",
+    "check": "npm run lint && npm run format:check && npm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "globals": "^16.0.0",
+    "prettier": "^3.0.0"
+  }
+}

@@ -1,0 +1,206 @@
+/* mind map */
+.mm-layer {
+  position: relative;
+}
+.mm-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.mm-svg path {
+  fill: none;
+}
+.mm-svg .t {
+  stroke: var(--wire);
+  stroke-width: 1.8;
+}
+.mm-svg .df {
+  stroke: var(--make);
+  stroke-width: 1.6;
+  stroke-dasharray: 5 4;
+}
+.mm-svg .ul {
+  stroke: var(--link);
+  stroke-width: 2.6;
+}
+.mm-svg .ul.sel {
+  stroke-width: 4;
+}
+.mm-svg .hit {
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+.mm-svg .tmp {
+  stroke: var(--link);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+.mm-svg marker path {
+  stroke: none;
+}
+.mm-svg #arDf path {
+  fill: var(--make);
+}
+.mm-svg #arUl path {
+  fill: var(--link);
+}
+.mm-svg text {
+  font: 500 11px var(--sans);
+  fill: var(--decide);
+}
+.mm-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 9px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  line-height: 1.3;
+  max-width: 210px;
+  width: max-content;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+}
+.mm-node .num {
+  margin-right: 5px;
+  font-size: 10.5px;
+  padding: 0 4px;
+}
+.mm-node.root {
+  background: var(--ink);
+  color: var(--surface);
+  border-color: var(--ink);
+  font: 700 15px/1.2 var(--cond);
+  padding: 10px 16px;
+  max-width: 260px;
+  text-align: center;
+}
+.mm-node.step {
+  border-left: 4px solid var(--step);
+}
+.mm-node.decision {
+  background: var(--decide-bg);
+  border-color: color-mix(in srgb, var(--decide) 50%, var(--line));
+}
+.mm-node.loop {
+  border: 1.5px dashed var(--loop);
+  background: var(--loop-bg);
+}
+.mm-node.parallel {
+  border-style: dashed;
+}
+.mm-node.branch {
+  border: 1.5px solid var(--decide);
+  color: var(--decide);
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 11.5px;
+  padding: 3px 10px;
+}
+.mm-node.branch.implied {
+  border-style: dashed;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.mm-node.out {
+  background: var(--make-bg);
+  color: var(--make);
+  border-color: color-mix(in srgb, var(--make) 35%, transparent);
+  font: 500 11px var(--mono);
+  box-shadow: none;
+}
+.mm-node.use {
+  background: var(--surface-2);
+  color: var(--muted);
+  font: 500 11px var(--mono);
+  box-shadow: none;
+}
+.mm-node.sel {
+  box-shadow: 0 0 0 4px var(--ring);
+  border-color: var(--step);
+}
+.mm-node.linksrc {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--link) 40%, transparent);
+}
+.mm-node .dot {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--link);
+  cursor: crosshair;
+  opacity: 0.55;
+}
+.mm-node .dot.r {
+  right: -7px;
+}
+.mm-node .dot.l {
+  left: -7px;
+}
+.mm-node:hover .dot {
+  opacity: 1;
+}
+.mm-lchip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: var(--surface);
+  border: 1.5px solid var(--link);
+  color: var(--link);
+  border-radius: 999px;
+  font: 600 11px/1.2 var(--sans);
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mm-lchip.sel {
+  background: var(--link);
+  color: var(--surface);
+}
+.linkbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--link) 8%, var(--surface));
+  flex-wrap: wrap;
+  font-size: 12.5px;
+}
+.linkbar input {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 3px 8px;
+  min-width: 160px;
+  flex: 1;
+  max-width: 280px;
+}
+.legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+  align-items: center;
+}
+.legend i {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  border-top: 2px solid;
+  margin-right: 5px;
+  vertical-align: 3px;
+}
