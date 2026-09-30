@@ -18,7 +18,13 @@ The page opens with an example skill (a pull request review). Each of its steps 
 
 The app is fully static: HTML, CSS and native ES modules, plus a vendored copy of JSZip and self-hosted fonts. There is no build step and no backend. Everything in `public/` is the site.
 
-**Privacy:** there are no analytics, trackers or third-party requests. Your files stay in your browser (in `localStorage`, so a reload keeps your work). They're only sent to an AI provider when you use an AI feature with your own key.
+## Try It Online
+
+No installation required. You can access the live, hosted version of the tool here:
+[justools.in](https://justools.in/)
+
+The hosted version provides direct access to the available tools through a your browser.
+
 
 ## Run locally
 
