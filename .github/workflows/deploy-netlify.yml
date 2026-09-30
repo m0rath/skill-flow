@@ -1,0 +1,65 @@
+# Publishes public/ to Netlify production on every push to main, after the checks pass.
+# Needs the NETLIFY_AUTH_TOKEN secret and the NETLIFY_SITE_ID variable (Settings → Secrets and variables → Actions).
+# Turn off Netlify's own Git builds so each commit deploys only once.
+name: Deploy to Netlify
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deploys run one at a time, in order. A deploy that has started is never cancelled halfway.
+concurrency:
+  group: netlify-production
+  cancel-in-progress: false
+
+jobs:
+  check:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://justools.in
+    steps:
+      - uses: actions/checkout@v4
+      # The Google Analytics ID lives in the Netlify project's environment variables, not in git.
+      # Netlify doesn't build this site, so the value is fetched from the Netlify API and written into the file.
+      # Without it (or if the lookup fails) the site deploys without analytics.
+      - name: Add Google Analytics ID from Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
+        run: |
+          api() { curl -sf -H "Authorization: Bearer $NETLIFY_AUTH_TOKEN" "https://api.netlify.com/api/v1/$1"; }
+          account=$(api "sites/$NETLIFY_SITE_ID" | jq -r '.account_id // .account_slug // empty') || true
+          id=""
+          if [ -n "$account" ]; then
+            id=$(api "accounts/$account/env/GA_MEASUREMENT_ID?site_id=$NETLIFY_SITE_ID" |
+              jq -r '[.values[] | select(.context == "production" or .context == "all")] | sort_by(.context != "production") | .[0].value // empty') || true
+          fi
+          if [[ "$id" =~ ^G-[A-Z0-9]+$ ]]; then
+            sed -i "s/__GA_MEASUREMENT_ID__/$id/" public/assets/js/analytics.js
+            echo "Google Analytics enabled ($id)."
+          else
+            echo "::warning::GA_MEASUREMENT_ID isn't set in Netlify (or isn't a G-XXXX ID). Deploying without analytics."
+          fi
+      # Pinned to the v2.4.0 commit: this third-party action receives the deploy token.
+      - uses: jsmrcaga/action-netlify-deploy@ae36ac1b3d1ad3646eecb5631977e7314d3a6a2f # v2.4.0
+        with:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
+          NETLIFY_DEPLOY_TO_PROD: true
+          # The action passes the message through a shell, so it only uses the commit hash, never commit text.
+          NETLIFY_DEPLOY_MESSAGE: "main@${{ github.sha }}"
+          build_directory: public
+          # The site is static: nothing to install or build.
+          install_command: "true"
+          build_command: "true"
+      - name: Summary
+        run: echo "Deployed to ${NETLIFY_LIVE_URL:-https://justools.in}" >> "$GITHUB_STEP_SUMMARY"

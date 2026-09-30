@@ -20,6 +20,6 @@ chosen provider; ways around the Content Security Policy.
 
 ## Rules for contributors
 
-- Don't add third-party scripts or analytics. Any script on the page could read stored keys.
+- Don't add third-party scripts. Any script on the page could read stored keys. The one exception is Google Analytics in `public/assets/js/analytics.js`, which only loads when the deploy sets a measurement ID.
 - Escape all dynamic content with `esc()` (`public/assets/js/lib/util.js`) before putting it into HTML.
 - A new network host must be added to `connect-src` in both `public/index.html` and `public/_headers`.

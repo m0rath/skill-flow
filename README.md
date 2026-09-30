@@ -18,8 +18,6 @@ The page opens with an example skill (a pull request review). Each of its steps 
 
 The app is fully static: HTML, CSS and native ES modules, plus a vendored copy of JSZip and self-hosted fonts. There is no build step and no backend. Everything in `public/` is the site.
 
-**Privacy:** there are no analytics, trackers or third-party requests. Your files stay in your browser (in `localStorage`, so a reload keeps your work). They're only sent to an AI provider when you use an AI feature with your own key.
-
 ## Run locally
 
 You need Node.js 20 or newer (only for the dev server and tooling).
@@ -68,7 +66,7 @@ public/                    the deployable site (publish this folder)
 tests/                     unit tests for model/, lib/ and ai/ helpers
 docs/                      README images
 scripts/serve.js           zero-dependency dev server
-.github/workflows/         CI (lint, format, test) and GitHub Pages deploy
+.github/workflows/         CI (lint, format, test) and Netlify deploy
 netlify.toml               Netlify config (publish public/, no build)
 ```
 
@@ -76,19 +74,22 @@ netlify.toml               Netlify config (publish public/, no build)
 
 The publish directory is always `public` and there is no build command.
 
+### Netlify (how justools.in is deployed)
+
+`.github/workflows/deploy-netlify.yml` runs the checks and then publishes `public/` to Netlify production on every push to `main`. You can also run it by hand from the **Actions** tab. To use it on your own site:
+
+1. Create a Netlify site, and turn off its own Git builds (**Project configuration → Build & deploy → Continuous deployment → Stop builds**) so each commit deploys once.
+2. In the GitHub repository, under **Settings → Secrets and variables → Actions**:
+   - add the secret `NETLIFY_AUTH_TOKEN`, a personal access token from **Netlify → User settings → Applications**;
+   - add the variable `NETLIFY_SITE_ID`, the **Project ID** from the site's **Project configuration → General** page.
+3. Change the `url` in the workflow, and `og:url` and `og:image` in `public/index.html`, to your domain.
+4. Optional, for Google Analytics: in Netlify, add the environment variable `GA_MEASUREMENT_ID` (your `G-XXXXXXXXXX` ID) under **Project configuration → Environment variables**, for the production context or all contexts. Don't mark it as secret, or the API can't read it. The workflow writes it into `public/assets/js/analytics.js` at deploy time. The ID stays out of git, and without it the site ships with no analytics.
+
+`public/_headers` adds the security headers. Without the Action, you can connect the repository in Netlify instead (`netlify.toml` already sets the publish directory to `public`), or drag the `public` folder onto <https://app.netlify.com/drop>.
+
 ### GitHub Pages
 
-The repository includes a workflow (`.github/workflows/deploy-pages.yml`) that publishes `public/` on every push to `main`.
-
-1. Go to **Settings → Pages → Build and deployment** and set **Source** to **GitHub Actions**.
-2. Push to `main` (or run the workflow by hand from the **Actions** tab).
-3. The site appears at `https://<user>.github.io/<repo>/`.
-
-GitHub Pages can't set custom headers, so the Content Security Policy comes from the `<meta>` tag in `index.html` only. A private repository needs a paid plan to use Pages.
-
-### Netlify
-
-Connect the repository. `netlify.toml` already sets the publish directory to `public`, and `public/_headers` adds the security headers. You can also drag the `public` folder onto <https://app.netlify.com/drop>.
+Add a workflow that uploads `public/` with `actions/upload-pages-artifact` and publishes it with `actions/deploy-pages`, then set **Settings → Pages → Source** to **GitHub Actions**. Pages can't set custom headers, so the Content Security Policy comes from the `<meta>` tag in `index.html` only. `public/.nojekyll` is already there.
 
 ### Cloudflare Pages
 
@@ -117,7 +118,7 @@ Chat, AI mapping and the gap review work with any of three providers. Each user 
 
 ### Security notes for shared deployments
 
-- Anyone who can run JavaScript on the page could read a key stored there. Host only on a domain you control, and don't add third-party scripts. Uploaded file content is always escaped, never run.
+- Anyone who can run JavaScript on the page could read a key stored there. Host only on a domain you control, and keep third-party scripts to a minimum. The only one is Google Analytics, and only when a measurement ID is set at deploy time. Uploaded file content is always escaped, never run.
 - For a team deployment where people shouldn't handle raw keys, put a small proxy (for example a Netlify Function or Cloudflare Worker) in front of the provider. The proxy holds the key and checks users, and the request URLs in `REQ` in `public/assets/js/ai/providers.js` point at it. The app doesn't include a proxy.
 - Check your organization's policy on API keys in browsers before sharing the link widely.
 
@@ -128,7 +129,7 @@ Chat, AI mapping and the gap review work with any of three providers. Each user 
 - **Colors:** CSS variables at the top of `public/assets/css/base.css`, with separate light and dark values.
 - **Quick parser** (used without an API key): `public/assets/js/model/quick-parse.js`.
 - **Example skill** shown on first visit: `public/assets/js/data/example.js`.
-- **Social preview:** replace `public/og-image.png`, and set `og:image` in `public/index.html` to its full deployed URL. Link previews need an absolute URL.
+- **Social preview:** replace `public/og-image.png`. If you deploy under another domain, change `og:url` and `og:image` in `public/index.html`; link previews need absolute URLs.
 - **New external hosts** (for example a proxy or another provider): add them to `connect-src` in both the CSP `<meta>` tag in `public/index.html` and `public/_headers`.
 
 ## License

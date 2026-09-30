@@ -3,12 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <!-- Keep in sync with public/_headers. AI providers you add must be listed in connect-src. -->
+    <!-- Keep in sync with public/_headers. AI providers you add must be listed in connect-src. The Google hosts are for analytics.js. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; img-src 'self' data: blob: https://*.google-analytics.com https://*.googletagmanager.com; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <meta name="referrer" content="no-referrer" />
+    <!-- Google Analytics. Does nothing unless the deploy sets a measurement ID (see the file). -->
+    <script src="assets/js/analytics.js"></script>
     <meta
       name="description"
       content="Upload a Claude skill or Markdown playbook to see its workflow as a diagram and mind map, find gaps, and fix the file with AI (Claude, ChatGPT or Gemini)."
@@ -21,8 +23,9 @@
       property="og:description"
       content="Upload a Claude skill or Markdown playbook to see its workflow as a diagram and mind map, find gaps, and fix the file with AI (Claude, ChatGPT or Gemini)."
     />
-    <!-- Link previews (Slack, X, LinkedIn…) need an absolute image URL: replace og-image.png with the full deployed URL. -->
-    <meta property="og:image" content="og-image.png" />
+    <!-- Link previews (Slack, X, LinkedIn…) need absolute URLs. Change these if you deploy under another domain. -->
+    <meta property="og:url" content="https://justools.in/" />
+    <meta property="og:image" content="https://justools.in/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
