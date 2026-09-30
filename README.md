@@ -72,32 +72,6 @@ scripts/serve.js           zero-dependency dev server
 netlify.toml               Netlify config (publish public/, no build)
 ```
 
-## Deploy (all free)
-
-The publish directory is always `public` and there is no build command.
-
-### GitHub Pages
-
-The repository includes a workflow (`.github/workflows/deploy-pages.yml`) that publishes `public/` on every push to `main`.
-
-1. Go to **Settings → Pages → Build and deployment** and set **Source** to **GitHub Actions**.
-2. Push to `main` (or run the workflow by hand from the **Actions** tab).
-3. The site appears at `https://<user>.github.io/<repo>/`.
-
-GitHub Pages can't set custom headers, so the Content Security Policy comes from the `<meta>` tag in `index.html` only. A private repository needs a paid plan to use Pages.
-
-### Netlify
-
-Connect the repository. `netlify.toml` already sets the publish directory to `public`, and `public/_headers` adds the security headers. You can also drag the `public` folder onto <https://app.netlify.com/drop>.
-
-### Cloudflare Pages
-
-Create a project and connect the repository. Leave the build command empty and set the output directory to `public`. `public/_headers` is applied automatically.
-
-### Vercel
-
-Import the repository, choose the **Other** framework preset, leave the build command empty and set the output directory to `public`.
-
 ## AI features: bring your own key
 
 Chat, AI mapping and the gap review work with any of three providers. Each user picks one under **AI settings** in the app and adds their own key:
