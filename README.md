@@ -18,6 +18,14 @@ The page opens with an example skill (a pull request review). Each of its steps 
 
 The app is fully static: HTML, CSS and native ES modules, plus a vendored copy of JSZip and self-hosted fonts. There is no build step and no backend. Everything in `public/` is the site.
 
+## Try It Online
+
+No installation required. You can access the live, hosted version of the tool here:
+[justools.in](https://justools.in/)
+
+The hosted version provides direct access to the available tools through a your browser.
+
+
 ## Run locally
 
 You need Node.js 20 or newer (only for the dev server and tooling).
@@ -69,35 +77,6 @@ scripts/serve.js           zero-dependency dev server
 .github/workflows/         CI (lint, format, test) and Netlify deploy
 netlify.toml               Netlify config (publish public/, no build)
 ```
-
-## Deploy (all free)
-
-The publish directory is always `public` and there is no build command.
-
-### Netlify (how justools.in is deployed)
-
-`.github/workflows/deploy-netlify.yml` runs the checks and then publishes `public/` to Netlify production on every push to `main`. You can also run it by hand from the **Actions** tab. To use it on your own site:
-
-1. Create a Netlify site, and turn off its own Git builds (**Project configuration → Build & deploy → Continuous deployment → Stop builds**) so each commit deploys once.
-2. In the GitHub repository, under **Settings → Secrets and variables → Actions**:
-   - add the secret `NETLIFY_AUTH_TOKEN`, a personal access token from **Netlify → User settings → Applications**;
-   - add the variable `NETLIFY_SITE_ID`, the **Project ID** from the site's **Project configuration → General** page.
-3. Change the `url` in the workflow, and `og:url` and `og:image` in `public/index.html`, to your domain.
-4. Optional, for Google Analytics: in Netlify, add the environment variable `GA_MEASUREMENT_ID` (your `G-XXXXXXXXXX` ID) under **Project configuration → Environment variables**, for the production context or all contexts. Don't mark it as secret, or the API can't read it. The workflow writes it into `public/assets/js/analytics.js` at deploy time. The ID stays out of git, and without it the site ships with no analytics.
-
-`public/_headers` adds the security headers. Without the Action, you can connect the repository in Netlify instead (`netlify.toml` already sets the publish directory to `public`), or drag the `public` folder onto <https://app.netlify.com/drop>.
-
-### GitHub Pages
-
-Add a workflow that uploads `public/` with `actions/upload-pages-artifact` and publishes it with `actions/deploy-pages`, then set **Settings → Pages → Source** to **GitHub Actions**. Pages can't set custom headers, so the Content Security Policy comes from the `<meta>` tag in `index.html` only. `public/.nojekyll` is already there.
-
-### Cloudflare Pages
-
-Create a project and connect the repository. Leave the build command empty and set the output directory to `public`. `public/_headers` is applied automatically.
-
-### Vercel
-
-Import the repository, choose the **Other** framework preset, leave the build command empty and set the output directory to `public`.
 
 ## AI features: bring your own key
 
