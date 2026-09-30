@@ -20,6 +20,6 @@ First open-source release.
 
 ### Security
 
-- Strict Content Security Policy: no inline scripts, and network access only to the three AI providers (and to the site itself, so image exports can embed the fonts).
-- Self-hosted fonts, so the page makes no third-party requests.
+- Strict Content Security Policy: no inline scripts, and network access only to the three AI providers (and to the site itself, so image exports can embed the fonts), plus Google Analytics hosts.
+- Self-hosted fonts. The only third-party script is Google Analytics, which loads only when a measurement ID is set at deploy time.
 - Size limits on uploads and on unzipped files, which guard against zip bombs.

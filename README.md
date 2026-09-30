@@ -23,8 +23,8 @@ The app is fully static: HTML, CSS and native ES modules, plus a vendored copy o
 No installation required. You can access the live, hosted version of the tool here:
 [justools.in](https://justools.in/)
 
-The hosted version provides direct access to the available tools through a your browser.
-
+The hosted version provides direct access to the available tools in your browser.
+You just need the api key, google gemini offers it for free [here](https://aistudio.google.com/apikey?_gl=1*329ebo*_ga*MjgyNjg4MzU1LjE3OTA3NjA0NjQ.*_ga_P1DBVKWT6V*czE3OTA3NjA0NjMkbzEkZzAkdDE3OTA3NjA0NjgkajU1JGwwJGgyMTQyMzMyNjI2)
 
 ## Run locally
 
@@ -74,7 +74,7 @@ public/                    the deployable site (publish this folder)
 tests/                     unit tests for model/, lib/ and ai/ helpers
 docs/                      README images
 scripts/serve.js           zero-dependency dev server
-.github/workflows/         CI (lint, format, test) and GitHub Pages deploy
+.github/workflows/         CI (lint, format, test) and Netlify deploy
 netlify.toml               Netlify config (publish public/, no build)
 ```
 
@@ -97,7 +97,7 @@ Chat, AI mapping and the gap review work with any of three providers. Each user 
 
 ### Security notes for shared deployments
 
-- Anyone who can run JavaScript on the page could read a key stored there. Host only on a domain you control, and don't add third-party scripts. Uploaded file content is always escaped, never run.
+- Anyone who can run JavaScript on the page could read a key stored there. Host only on a domain you control, and keep third-party scripts to a minimum. The only one is Google Analytics, and only when a measurement ID is set at deploy time. Uploaded file content is always escaped, never run.
 - For a team deployment where people shouldn't handle raw keys, put a small proxy (for example a Netlify Function or Cloudflare Worker) in front of the provider. The proxy holds the key and checks users, and the request URLs in `REQ` in `public/assets/js/ai/providers.js` point at it. The app doesn't include a proxy.
 - Check your organization's policy on API keys in browsers before sharing the link widely.
 
@@ -108,7 +108,7 @@ Chat, AI mapping and the gap review work with any of three providers. Each user 
 - **Colors:** CSS variables at the top of `public/assets/css/base.css`, with separate light and dark values.
 - **Quick parser** (used without an API key): `public/assets/js/model/quick-parse.js`.
 - **Example skill** shown on first visit: `public/assets/js/data/example.js`.
-- **Social preview:** replace `public/og-image.png`, and set `og:image` in `public/index.html` to its full deployed URL. Link previews need an absolute URL.
+- **Social preview:** replace `public/og-image.png`. If you deploy under another domain, change `og:url` and `og:image` in `public/index.html`; link previews need absolute URLs.
 - **New external hosts** (for example a proxy or another provider): add them to `connect-src` in both the CSP `<meta>` tag in `public/index.html` and `public/_headers`.
 
 ## License

@@ -13,6 +13,11 @@ export default [
     },
   },
   {
+    // Loaded with a classic <script> tag so it runs before the app.
+    files: ["public/assets/js/analytics.js"],
+    languageOptions: { sourceType: "script" },
+  },
+  {
     files: ["tests/**/*.js", "scripts/**/*.js", "*.config.js"],
     languageOptions: { ecmaVersion: 2023, sourceType: "module", globals: globals.node },
   },
