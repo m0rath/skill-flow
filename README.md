@@ -23,8 +23,8 @@ The app is fully static: HTML, CSS and native ES modules, plus a vendored copy o
 No installation required. You can access the live, hosted version of the tool here:
 [justools.in](https://justools.in/)
 
-The hosted version provides direct access to the available tools through a your browser.
-
+The hosted version provides direct access to the available tools in your browser.
+You just need the api key, google gemini offers it for free [here](https://aistudio.google.com/apikey?_gl=1*329ebo*_ga*MjgyNjg4MzU1LjE3OTA3NjA0NjQ.*_ga_P1DBVKWT6V*czE3OTA3NjA0NjMkbzEkZzAkdDE3OTA3NjA0NjgkajU1JGwwJGgyMTQyMzMyNjI2)
 
 ## Run locally
 
