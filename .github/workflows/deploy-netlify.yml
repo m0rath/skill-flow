@@ -27,7 +27,7 @@ jobs:
       name: production
       url: https://justools.in
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The Google Analytics ID lives in the Netlify project's environment variables, not in git.
       # Netlify doesn't build this site, so the value is fetched from the Netlify API and written into the file.
       # Without it (or if the lookup fails) the site deploys without analytics.
