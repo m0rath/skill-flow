@@ -1,0 +1,26 @@
+{
+  "_comment": "Full browser navigation fingerprint for listing/detail GETs. Replace every {chrome_major} with the major version of the browser actually installed on the machine (see version_commands). Do NOT add 'br' to Accept-Encoding unless a brotli decoder is installed. Never add bot-identifying tokens.",
+  "headers": {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_major}.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate",
+    "sec-ch-ua": "\"Chromium\";v=\"{chrome_major}\", \"Google Chrome\";v=\"{chrome_major}\", \"Not-A.Brand\";v=\"99\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"macOS\"",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-User": "?1",
+    "Sec-Fetch-Dest": "document",
+    "Upgrade-Insecure-Requests": "1"
+  },
+  "version_commands": {
+    "darwin": "defaults read \"/Applications/Google Chrome.app/Contents/Info.plist\" CFBundleShortVersionString",
+    "linux": "google-chrome --version 2>/dev/null || chromium --version"
+  },
+  "notes": [
+    "Chrome freezes the macOS token at 10_15_7 and reports the major version only - keep both as-is.",
+    "On Linux, set sec-ch-ua-platform to \"Linux\" and the UA OS token to X11; Linux x86_64.",
+    "For XHR-style endpoints found in a source study, additionally mirror the page's own Referer / X-Requested-With / Origin exactly as recorded in source_study.json."
+  ]
+}

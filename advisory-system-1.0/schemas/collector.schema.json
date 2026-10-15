@@ -1,0 +1,456 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "collector.json - per-target metadata and state",
+  "description": "One file per vendor-product target at vendors/<vendor>/<product>/collector.json. Written by the collector agent and the scheduler runtime; read-only for the generated fetch script. Sections: identity (who/what), build (what was built, from which inputs), state (what the runner must remember between runs), health (is it working), repair (only while being fixed), recent_runs (history), alerts (what a human should see).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "target",
+    "status",
+    "builder_version",
+    "study",
+    "state",
+    "health",
+    "recent_runs",
+    "alerts"
+  ],
+  "$defs": {
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp, e.g. 2026-10-06T11:18:30Z"
+    },
+    "ts_or_null": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "properties": {
+    "target": {
+      "type": "string",
+      "pattern": "^[a-z0-9._-]+/[a-z0-9._-]+$",
+      "description": "<vendor slug>/<product slug>, e.g. cisco/nx-os. Equals the folder path under vendors/."
+    },
+    "status": {
+      "enum": [
+        "active",
+        "broken",
+        "repairing",
+        "disabled"
+      ],
+      "description": "active: scheduled and healthy. broken: self-heal exhausted its 3 attempts, human needed. repairing: an agent repair is in progress (see `repair`). disabled: a human switched it off; never scheduled."
+    },
+    "builder_version": {
+      "type": "string",
+      "description": "The advisory-script-builder skill `version` the product script was built with. Older than the skill's current version -> stale -> rebuilt with reason spec_changed."
+    },
+    "study": {
+      "type": "object",
+      "required": [
+        "study_version",
+        "studied_at"
+      ],
+      "additionalProperties": false,
+      "description": "The source_study.json the script was built from. Differs from the file on disk -> rebuilt with reason study_changed.",
+      "properties": {
+        "study_version": {
+          "type": "string"
+        },
+        "studied_at": {
+          "$ref": "#/$defs/ts"
+        }
+      }
+    },
+    "registry_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the target's registry entry at build time. Differs from a fresh hash -> rebuilt with reason registry_changed."
+    },
+    "validated_at": {
+      "$ref": "#/$defs/ts",
+      "description": "When the last --dry-run --limit 5 passed the agent's thresholds."
+    },
+    "last_dry_run_stats": {
+      "type": "object",
+      "description": "The stats block of the dry run that passed at `validated_at`. Baseline for the regression guard (version_kind_mix drift) and for the failure_report.stats on a repair."
+    },
+    "source_fingerprint": {
+      "type": "object",
+      "description": "Structural fingerprint of the listing and a sample detail page (e.g. hashes of selector paths, content type, pagination shape) recorded at build time. A changed fingerprint at run time is the self-heal trigger; the old and new values become failure_report.fingerprint_diff."
+    },
+    "state": {
+      "type": "object",
+      "required": [
+        "cursor"
+      ],
+      "additionalProperties": false,
+      "description": "Everything the runner must remember between runs. Written by the runtime from the script's RUN_SUMMARY; the script itself only reads it. Any map left out is treated as empty.",
+      "properties": {
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Resume point passed as --since on the next run. null = next run is a full backfill. Only advances on exit code 0."
+        },
+        "last_full_listing": {
+          "$ref": "#/$defs/ts_or_null",
+          "description": "When the listing was last scanned end to end (no --since pruning). The daily full scan that catches old incomplete advisories keys on this."
+        },
+        "failed": {
+          "type": "object",
+          "description": "Advisories we tried to download and do not have. Keyed by advisory_id. Retried by detail URL on every run until gave_up.",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "status",
+              "reason",
+              "attempts",
+              "first_failed",
+              "last_failed"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Last HTTP status; 0 when no response was received or the failure was not HTTP (parse error, affects_product() returned None)."
+              },
+              "reason": {
+                "type": "string",
+                "description": "Short classification: timeout, connection, http_5xx, http_403, parse_error, affects_product_unreadable, csaf_unreadable, ..."
+              },
+              "attempts": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "first_failed": {
+                "$ref": "#/$defs/ts"
+              },
+              "last_failed": {
+                "$ref": "#/$defs/ts"
+              },
+              "gave_up": {
+                "type": "boolean",
+                "description": "Set by the agent when its give-up policy (attempts and/or age since first_failed) is met. Never fetched again."
+              }
+            }
+          }
+        },
+        "incomplete": {
+          "type": "object",
+          "description": "Stored advisories missing an important field (workaround, cve_ids, version_affected, security_details) or their CSAF twin. Keyed by advisory_id. Re-fetched when the listing row updates, or every 7 days for sources without row dates.",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "last_fetched",
+              "missing"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "last_fetched": {
+                "$ref": "#/$defs/ts"
+              },
+              "missing": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "rejected": {
+          "type": "object",
+          "description": "Advisories fetched but not stored. Keyed by advisory_id. A product-mismatch ID rests 30 days or until its listing row updates - unless audit.verdict is wrong, then it is fetched again next run. `audit` is written by the collector agent only.",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "reason",
+              "first_rejected",
+              "last_checked",
+              "count"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "product mismatch | date_published missing | schema invalid | ..."
+              },
+              "detail": {
+                "type": "string",
+                "description": "The affects_product() detail, e.g. 'primary: IOS XE only; text: no affected-products section'."
+              },
+              "first_rejected": {
+                "$ref": "#/$defs/ts"
+              },
+              "last_checked": {
+                "$ref": "#/$defs/ts"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "audit": {
+                "type": "object",
+                "required": [
+                  "verdict",
+                  "at"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "verdict": {
+                    "enum": [
+                      "correct",
+                      "wrong"
+                    ]
+                  },
+                  "at": {
+                    "$ref": "#/$defs/ts"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "withdrawn": {
+          "type": "object",
+          "description": "Stored advisories that have stopped appearing in the listing. Keyed by advisory_id. missing_runs counts consecutive full-listing scans without the ID; confirmed_at is set once the vendor's page itself says withdrawn (is_withdrawn()). The record stays in advisories.json either way.",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "missing_runs"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "missing_runs": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "confirmed_at": {
+                "$ref": "#/$defs/ts_or_null"
+              }
+            }
+          }
+        }
+      }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Is the target working right now. Updated by the runtime after every run; read by the scheduler and the agent's monitoring pass.",
+      "properties": {
+        "last_run": {
+          "$ref": "#/$defs/ts_or_null"
+        },
+        "last_success": {
+          "$ref": "#/$defs/ts_or_null",
+          "description": "Last run with exit code 0."
+        },
+        "consecutive_failures": {
+          "$ref": "#/$defs/count",
+          "description": "Runs with exit code 2 in a row. Reset to 0 on exit 0 or 1."
+        },
+        "source_available": {
+          "type": "boolean",
+          "description": "false after a listing_unreachable run; the scheduler backs off instead of hammering the source."
+        },
+        "records_last_24h": {
+          "$ref": "#/$defs/count",
+          "description": "New + updated records in the last 24 h, maintained by the runtime. Zero for an unusual stretch is the 'source went quiet' signal."
+        },
+        "schedule_next": {
+          "$ref": "#/$defs/ts_or_null",
+          "description": "When the scheduler intends to run next (after backoff)."
+        }
+      }
+    },
+    "repair": {
+      "type": "object",
+      "required": [
+        "attempt",
+        "started",
+        "trigger"
+      ],
+      "additionalProperties": false,
+      "description": "Present only while status is repairing. Holds the agent's retry budget so a crashed repair resumes at the right attempt. Deleted when status returns to active or becomes broken.",
+      "properties": {
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "started": {
+          "$ref": "#/$defs/ts"
+        },
+        "trigger": {
+          "enum": [
+            "validation",
+            "self-heal"
+          ],
+          "description": "validation: a dry run fell below thresholds. self-heal: a scheduled run failed or the source fingerprint changed."
+        },
+        "last_report": {
+          "type": "object",
+          "description": "The failure_report (builder skill section 2.3) passed on the most recent attempt."
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional cached summary of advisories.json so dashboards and the agent need not open the data file.",
+      "properties": {
+        "records": {
+          "$ref": "#/$defs/count"
+        },
+        "latest_advisory": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Newest date_published stored (YYYY-MM-DD)."
+        }
+      }
+    },
+    "recent_runs": {
+      "type": "array",
+      "maxItems": 30,
+      "description": "Newest first. One entry per non-dry run, built by the runtime from the script's RUN_SUMMARY and exit code. The agent reads rejected[] for its audit and log for http_evidence on a repair; the runtime reads the last 30 as its anomaly baseline.",
+      "items": {
+        "type": "object",
+        "required": [
+          "started",
+          "exit_code",
+          "status",
+          "log"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "started": {
+            "$ref": "#/$defs/ts"
+          },
+          "finished": {
+            "$ref": "#/$defs/ts"
+          },
+          "exit_code": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3,
+            "description": "0 success, 1 partial, 2 failed, 3 config error."
+          },
+          "status": {
+            "enum": [
+              "success",
+              "partial",
+              "failed",
+              "timeout",
+              "config_error"
+            ],
+            "description": "Runtime-assigned: exit 0/1/2/3 -> success/partial/failed/config_error; timeout when the 30-minute wall clock stopped the run (cursor unmoved, not a failure)."
+          },
+          "duration_s": {
+            "$ref": "#/$defs/count"
+          },
+          "full_listing": {
+            "type": "boolean"
+          },
+          "backfill": {
+            "type": "boolean",
+            "description": "true when the run started with a null cursor (first backfill in progress); excluded from anomaly baselines."
+          },
+          "ids_discovered": {
+            "$ref": "#/$defs/count"
+          },
+          "new": {
+            "$ref": "#/$defs/count"
+          },
+          "updated": {
+            "$ref": "#/$defs/count"
+          },
+          "recovered": {
+            "$ref": "#/$defs/count"
+          },
+          "failed": {
+            "$ref": "#/$defs/count"
+          },
+          "population": {
+            "type": "object",
+            "description": "Fraction of this run's stored records with each field populated, e.g. {\"summary\":1.0,\"version_affected\":0.95,\"date_published\":1.0}. Anomaly baseline input.",
+            "additionalProperties": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "rejected": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "reason"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "http": {
+            "type": "object",
+            "description": "Request counters from RUN_SUMMARY, e.g. {\"2xx\": 41, \"4xx\": 1, \"5xx\": 0, \"retries\": 2}.",
+            "additionalProperties": {
+              "$ref": "#/$defs/count"
+            }
+          },
+          "source_change_detected": {
+            "type": "boolean"
+          },
+          "log": {
+            "type": "string",
+            "description": "Repo-relative path of the run's log file."
+          }
+        }
+      }
+    },
+    "alerts": {
+      "type": "object",
+      "description": "Open alerts for a human, keyed by alert code (e.g. coverage_gap, broken, source_quiet, rejections_to_audit). Removing the key clears the alert.",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "message",
+          "since"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "since": {
+            "$ref": "#/$defs/ts"
+          }
+        }
+      }
+    }
+  }
+}

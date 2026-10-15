@@ -15,6 +15,12 @@ node_modules/
 
 # Test output
 coverage/
+.pytest_cache/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
 
 # Editors and OS files
 .vscode/
@@ -23,3 +29,4 @@ coverage/
 *~
 .DS_Store
 Thumbs.db
+

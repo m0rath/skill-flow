@@ -1,0 +1,16 @@
+{
+  "advisories": "http://127.0.0.1:8765/advisories",
+  "advisory_id_pattern": "^ACME-SA-\\d{4}-\\d{4}$",
+  "advisory_url": "http://127.0.0.1:8765/advisory/{advisory_id}",
+  "csaf_url": "http://127.0.0.1:8765/csaf/{advisory_id}.json",
+  "products": [
+    {
+      "allowed_functions": [],
+      "output_file": "mitigate_acmeos.qlv",
+      "product_name": "AcmeOS",
+      "updated_time": "2026-10-06T13:46:12Z",
+      "vm_product_version": "Acme AcmeOS"
+    }
+  ],
+  "vendor_name": "acme"
+}
