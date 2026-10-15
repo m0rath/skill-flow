@@ -1,9 +1,0 @@
-{
-  "vendor": "acme", "analysis_version": "1.0", "last_analysed": "2026-10-06T13:50:00Z", "timezone": "UTC",
-  "pattern": "moderate", "cron": "0 */6 * * *", "jitter_s": 2160,
-  "burst_windows": [ { "reason": "weekly: Wed = 64%", "cron": "*/30 * * * 3", "duration_h": 24 } ],
-  "evidence": { "data_points": 42, "window": { "from": "2025-10-06", "to": "2026-10-05", "days": 365 },
-    "advisories_per_week": 1.4, "weekday_histogram": { "Mon": 3, "Tue": 4, "Wed": 27, "Thu": 5, "Fri": 3, "Sat": 0, "Sun": 0 },
-    "week_of_month_histogram": { "1st Wed": 7, "2nd Wed": 7, "3rd Wed": 6, "4th Wed": 7 }, "hour_histogram": null,
-    "batching_rule": "weekly", "documented_release_days": null, "timezone_source": "default", "products_read": ["acmeos"], "changed_from_previous": null }
-}
