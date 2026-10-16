@@ -1,0 +1,39 @@
+# robots.txt for https://justools.in
+# Goal: be found by search engines AND quoted by AI answer engines.
+
+User-agent: *
+Allow: /
+# Optional: keep crawlers out of non-page routes if you have them
+# Disallow: /api/
+# Disallow: /uploads/
+
+# Search engines
+User-agent: Googlebot
+Allow: /
+User-agent: Bingbot
+Allow: /
+
+# AI search and answer bots (these send you visitors and citations)
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Perplexity-User
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: Claude-User
+Allow: /
+User-agent: Claude-SearchBot
+Allow: /
+User-agent: Google-Extended
+Allow: /
+User-agent: Applebot
+Allow: /
+
+# To opt out of AI model training only, replace "Allow: /" with "Disallow: /"
+# under GPTBot, CCBot and Google-Extended. Search visibility is unaffected.
+
+Sitemap: https://justools.in/sitemap.xml

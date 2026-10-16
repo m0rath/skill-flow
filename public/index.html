@@ -94,9 +94,32 @@ button{cursor:pointer}
 .status{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);white-space:nowrap}
 .status .dot{width:8px;height:8px;border-radius:50%;background:var(--faint)}
 .status.claude .dot{background:var(--loop)} .status.quick .dot{background:var(--decide)} .status.example .dot{background:var(--step)}
-.status.busy .dot{background:var(--step);animation:pulse 1s ease-in-out infinite}
+.status.busy{border-color:var(--pink);background:var(--pink-bg);color:var(--ink)}
+.status.busy .dot{width:11px;height:11px;border-radius:50%;border:2px solid var(--pink-border);border-top-color:var(--pink);background:transparent;animation:spin 0.75s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
 @keyframes pulse{50%{opacity:.25}}
-@media (prefers-reduced-motion:reduce){.status.busy .dot,.typing i{animation:none!important}}
+@media (prefers-reduced-motion:reduce){.status.busy .dot,.typing i,.ai-banner-spinner,.sugg-spinner{animation:none!important}}
+
+.btn-spinner{display:inline-block;width:11px;height:11px;border-radius:50%;border:2px solid rgba(255,255,255,0.4);border-top-color:#fff;animation:spin 0.75s linear infinite;vertical-align:middle;margin-right:5px}
+.btn.ghost .btn-spinner, .btn:not(.primary) .btn-spinner{border-color:var(--line);border-top-color:var(--ink)}
+
+.ai-banner{position:sticky;top:6px;z-index:40;margin:6px 10px 10px;display:flex;align-items:center;gap:12px;padding:9px 16px;background:var(--surface);border:1.5px solid var(--pink);border-radius:10px;box-shadow:0 4px 18px rgba(255,51,102,0.18);animation:bannerFadeIn 0.2s ease-out}
+@keyframes bannerFadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.ai-banner-spinner{width:16px;height:16px;border-radius:50%;border:2.5px solid var(--pink-bg);border-top-color:var(--pink);animation:spin 0.75s linear infinite;flex:none}
+.ai-banner-content{flex:1;min-width:0;display:flex;flex-direction:column;font-size:12.5px;line-height:1.35}
+.ai-banner-content strong{color:var(--ink);font-weight:600}
+.ai-banner-content span{color:var(--muted);font-size:11.5px}
+
+.sugg-analyzing-box{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:44px 20px;background:var(--surface-2);border:1.5px dashed var(--pink-border);border-radius:12px;margin:16px 0;text-align:center}
+.sugg-spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--pink-bg);border-top-color:var(--pink);animation:spin 0.75s linear infinite;margin-bottom:14px}
+.sugg-analyzing-box h4{margin:0 0 6px;font-size:15px;color:var(--ink);font-weight:600}
+.sugg-analyzing-box p{margin:0 0 16px;color:var(--muted);font-size:13px;max-width:440px}
+
+.sugg-empty-box{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;margin:16px 0;text-align:center}
+.sugg-empty-icon{width:46px;height:46px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted);margin-bottom:14px}
+.sugg-empty-box h4{margin:0 0 8px;font-size:15px;color:var(--ink);font-weight:600}
+.sugg-empty-box p{margin:0 0 6px;color:var(--muted);font-size:13px;max-width:480px;line-height:1.5}
+.sugg-empty-box .sugg-sub-note{font-size:12px;color:var(--faint);margin-bottom:18px}
 .err{color:var(--danger);font-size:13px}
 
 .summary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 24px;align-items:start}
@@ -248,6 +271,8 @@ select.jump{height:28px;border:1px solid var(--line);border-radius:6px;backgroun
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
 .card{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;background:var(--surface);border-top:3px solid var(--wire)}
 .card.high{border-top-color:var(--danger)} .card.medium{border-top-color:var(--decide)} .card.low{border-top-color:var(--step)}
+.card.fixing{border-color:var(--pink);background:color-mix(in srgb,var(--pink) 5%,var(--surface))}
+.card.resolved{border-top-color:var(--make);border-left:3px solid var(--make)}
 .card .meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .sev{font:600 10.5px var(--sans);letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px}
 .sev.high{background:var(--danger-bg);color:var(--danger)} .sev.medium{background:var(--decide-bg);color:var(--decide)} .sev.low{background:var(--step-bg);color:var(--step)}
@@ -1736,6 +1761,14 @@ html {
     <section class="summary" id="summary"></section>
 <div class="main">
     <section class="panel" aria-label="Workflow">
+      <div class="ai-banner" id="aiBanner" hidden>
+        <span class="ai-banner-spinner"></span>
+        <div class="ai-banner-content">
+          <strong id="aiBannerTitle">AI is analyzing…</strong>
+          <span id="aiBannerSub">Mapping workflow structure and dependencies</span>
+        </div>
+        <button class="btn sm ghost" id="aiBannerStop" type="button" style="border-color:var(--pink-border);color:var(--pink);">Cancel</button>
+      </div>
       <div class="tabs" role="tablist">
         <button class="tab" role="tab" data-tab="overview" aria-selected="true" type="button">Overview</button>
         <button class="tab" role="tab" data-tab="flows" aria-selected="false" type="button">Flows</button>
@@ -2387,8 +2420,7 @@ function localChecksFlow(){
 }
 function flaggedIds(){
   const ids = new Set();
-  localChecks().forEach(s => s.nodeId && ids.add(s.nodeId));
-  (S.sugg.claude || []).forEach(s => { if (s.nodeId && !S.sugg.dismissed.includes(s.id)) ids.add(s.nodeId); });
+  (S.sugg && S.sugg.claude ? S.sugg.claude : []).forEach(s => { if (s.nodeId && !S.sugg.dismissed.includes(s.id)) ids.add(s.nodeId); });
   return ids;
 }
 
@@ -2644,11 +2676,19 @@ function allCreates(){
   return [...map.values()];
 }
 function counts(){ const c = {step:0, decision:0, loop:0}; ordered().forEach(n => { if (n.kind === "decision") c.decision++; else if (n.kind === "loop") c.loop++; else if (n.kind !== "parallel") c.step++; }); return c; }
-function suggCount(){ return localChecks().length + (S.sugg.claude || []).filter(s => !S.sugg.dismissed.includes(s.id)).length; }
+function suggCount(){ return (S.sugg && S.sugg.claude ? S.sugg.claude.filter(s => !S.sugg.dismissed.includes(s.id)).length : 0); }
 function renderSummary(){
-  const m = S.model, c = counts(), gaps = suggCount();
-  $("summary").innerHTML = `<div><span class="eyebrow">Workflow</span><h2>${esc(m.title)}</h2>${m.summary ? `<p class="desc">${esc(m.summary)}</p>` : ""}${m.trigger ? `<div class="trigger"><span class="eyebrow">Runs when</span><span>${esc(m.trigger)}</span></div>` : ""}</div>
-  <div class="stats"><div class="stat s"><b>${c.step}</b><span>steps</span></div><div class="stat d"><b>${c.decision}</b><span>decisions</span></div><div class="stat l"><b>${c.loop}</b><span>repeats</span></div><div class="stat m"><b>${allCreates().length}</b><span>outputs</span></div><div class="stat g"><b>${gaps}</b><span>possible gaps</span></div></div>`;
+  const isSkill = (typeof isSkillWorkspace === "function" && isSkillWorkspace(S)) || appMode === "skill-flow";
+  const gaps = suggCount();
+  if (isSkill){
+    const m = S.model, c = counts();
+    $("summary").innerHTML = `<div><span class="eyebrow">Workflow</span><h2>${esc(m.title)}</h2>${m.summary ? `<p class="desc">${esc(m.summary)}</p>` : ""}${m.trigger ? `<div class="trigger"><span class="eyebrow">Runs when</span><span>${esc(m.trigger)}</span></div>` : ""}</div>
+    <div class="stats"><div class="stat s"><b>${c.step}</b><span>steps</span></div><div class="stat d"><b>${c.decision}</b><span>decisions</span></div><div class="stat l"><b>${c.loop}</b><span>repeats</span></div><div class="stat m"><b>${allCreates().length}</b><span>outputs</span></div>${gaps ? `<div class="stat g"><b>${gaps}</b><span>AI gaps</span></div>` : ""}</div>`;
+  } else {
+    const m = S.model, P = S.project || analyzeProject();
+    $("summary").innerHTML = `<div><span class="eyebrow">Project · ${esc(S.projectName || "")}</span><h2>${esc(m.title)}</h2>${m.summary ? `<p class="desc">${esc(m.summary)}</p>` : ""}${m.trigger ? `<div class="trigger"><span class="eyebrow">Used by</span><span>${esc(m.trigger)}</span></div>` : ""}</div>
+    <div class="stats"><div class="stat s"><b>${(m.components || []).length}</b><span>components</span></div><div class="stat l"><b>${P.total.toLocaleString()}</b><span>files</span></div><div class="stat d"><b>${P.lines >= 10000 ? Math.round(P.lines / 1000) + "k" : P.lines.toLocaleString()}</b><span>lines</span></div><div class="stat m"><b>${P.tests.length}</b><span>test files</span></div>${gaps ? `<div class="stat g"><b>${gaps}</b><span>AI gaps</span></div>` : ""}</div>`;
+  }
   $("suggBadge").hidden = !gaps; $("suggBadge").textContent = gaps;
 }
 function renderSideStatic(){
@@ -2688,37 +2728,179 @@ $("detail").addEventListener("click", e => {
 /* ================= suggestions ================= */
 function sugCard(s){
   const node = s.nodeId && getNode(s.nodeId);
-  return `<div class="card ${esc(s.sev)}"><div class="meta"><span class="sev ${esc(s.sev)}">${esc(s.sev)}</span><span class="cat">${esc(s.cat)}</span>${node ? `<button type="button" class="stepref" data-goto="${node.id}">${esc(refLabel(node))}</button>` : ""}</div>
+  const isFixing = !!s._fixing;
+  return `<div class="card ${esc(s.sev)}${isFixing ? " fixing" : ""}"><div class="meta"><span class="sev ${esc(s.sev)}">${esc(s.sev)}</span><span class="cat">${esc(s.cat)}</span>${node ? `<button type="button" class="stepref" data-goto="${node.id}">${esc(refLabel(node))}</button>` : ""}</div>
   <h4>${esc(s.title)}</h4>${s.whatIf ? `<p class="whatif">${esc(s.whatIf)}</p>` : ""}${s.suggestion ? `<p class="fix">${esc(s.suggestion)}</p>` : ""}
-  <div class="acts">${sampleFn ? `<button class="btn sm primary" type="button" data-sfix="${esc(s.id)}">Fix in file</button><button class="btn sm" type="button" data-sask="${esc(s.id)}">Discuss</button>` : ""}<button class="btn sm ghost" type="button" data-sdis="${esc(s.id)}">Dismiss</button></div></div>`;
+  <div class="acts">${sampleFn ? `<button class="btn sm primary" type="button" data-sfix="${esc(s.id)}"${isFixing ? " disabled" : ""}>${isFixing ? '<span class="btn-spinner"></span> Applying fix…' : "Fix in file"}</button><button class="btn sm" type="button" data-sask="${esc(s.id)}">Discuss</button>` : ""}<button class="btn sm ghost" type="button" data-sdis="${esc(s.id)}">Dismiss</button></div></div>`;
 }
-function allSugg(){ return [...localChecks(), ...(S.sugg.claude || []).filter(s => !S.sugg.dismissed.includes(s.id))]; }
+function allSugg(){ return (S.sugg && S.sugg.claude ? S.sugg.claude.filter(s => !(S.sugg.dismissed || []).includes(s.id)) : []); }
 function renderSuggest(){
-  const local = localChecks(), cl = (S.sugg.claude || []).filter(s => !S.sugg.dismissed.includes(s.id));
+  const cl = (S.sugg && S.sugg.claude ? S.sugg.claude.filter(s => !(S.sugg.dismissed || []).includes(s.id)) : []);
+  const fixedIds = Object.keys(S.sugg?.fixed || {});
+  const fixedItems = (S.sugg && S.sugg.claude ? S.sugg.claude.filter(s => fixedIds.includes(s.id)) : []);
   const rank = {high:0, medium:1, low:2}; const sortS = a => a.slice().sort((x, y) => (rank[x.sev] ?? 3) - (rank[y.sev] ?? 3));
-  let h = `<div class="sugg-head"><p>Gaps in the workflow: conditions with only one path ("if it's there… but what if it isn't?"), missing failure handling, unclear loops and missing files. Fixes go through the chat, so you can see each change before keeping it.</p>`;
-  h += sampleFn ? `<button class="btn primary" type="button" id="suggRun">${S.sugg.claude ? "Review again with AI" : "Find gaps with AI"}</button><button class="btn" type="button" id="suggStop" hidden>Stop</button>` : `<button class="btn primary" type="button" data-open-settings>Add an API key to use AI's review</button>`;
+  const isSkill = (typeof isSkillWorkspace === "function" && isSkillWorkspace(S)) || appMode === "skill-flow";
+
+  let h = `<div class="sugg-head">
+    <div>
+      <h3 style="margin:0 0 4px">AI Gap Review</h3>
+      <p style="margin:0;color:var(--muted);font-size:13px">Deep analysis for missing error handling, unhandled branches, edge cases, and proposed file fixes.</p>
+    </div>`;
+  h += sampleFn ? `<div style="display:flex;gap:8px"><button class="btn primary" type="button" id="suggRun">${S.sugg && S.sugg.claude ? "Review again with AI" : "Find gaps with AI"}</button><button class="btn" type="button" id="suggStop" hidden>Stop</button></div>` : `<button class="btn primary" type="button" data-open-settings>Add an API key to use AI review</button>`;
   h += `</div><div class="err" id="suggErr" hidden></div>`;
-  if (S.sugg.stale && S.sugg.claude) h += `<p class="empty" style="margin:0">The file changed since AI's review. Run it again for fresh results.</p>`;
-  h += `<h3>Quick checks <span class="badge n">${local.length}</span></h3>` + (local.length ? `<div class="cards">${sortS(local).map(sugCard).join("")}</div>` : `<p class="empty">No structural gaps found by the quick checks.</p>`);
-  h += `<h3>AI review <span class="badge n">${cl.length}</span></h3>` + (S.sugg.claude ? (cl.length ? `<div class="cards">${sortS(cl).map(sugCard).join("")}</div>` : `<p class="empty">No open items.</p>`) : `<p class="empty" id="suggIdle">${sampleFn ? "AI reads the whole file and lists what could go wrong: unhandled cases, missing validation, ambiguous steps and outputs nobody uses." : "Add an API key (Anthropic, OpenAI or Gemini) in AI settings to use this."}</p>`);
+
+  if (!sampleFn){
+    h += `
+      <div class="sugg-empty-box">
+        <div class="sugg-empty-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        </div>
+        <h4>AI Gap Review Requires an API Key</h4>
+        <p>Without an API key, justools provides instant local flowcharts, route call-graphs, and code indexing.</p>
+        <p class="sugg-sub-note">To detect edge-case failures, unhandled conditions, and get automated file fixes, add your Claude, OpenAI, or Gemini API key.</p>
+        <button class="btn primary" type="button" data-open-settings>Add API Key for AI Review</button>
+      </div>
+    `;
+  } else if (!S.sugg || !S.sugg.claude){
+    h += `
+      <div class="sugg-empty-box">
+        <div class="sugg-empty-icon" style="background:var(--pink-bg);color:var(--pink);border-color:var(--pink-border);">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        </div>
+        <h4>Ready for AI Review</h4>
+        <p>Click "Find gaps with AI" above to review ${isSkill ? "the workflow playbook" : "the project codebase"} for unhandled cases and proposed code edits.</p>
+      </div>
+    `;
+  } else if (!cl.length && !fixedItems.length){
+    h += `<div class="sugg-empty-box"><p class="empty" style="margin:20px 0;">No open gaps found by AI. ${isSkill ? "Workflow" : "Project"} looks clean.</p></div>`;
+  } else {
+    if (!cl.length && fixedItems.length){
+      h += `
+        <div class="sugg-empty-box" style="border-color:rgba(46,160,67,0.3);background:rgba(46,160,67,0.05);margin-bottom:20px">
+          <div class="sugg-empty-icon" style="background:var(--surface);color:var(--make);border-color:rgba(46,160,67,0.3)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <h4 style="color:var(--ink)">All Open Gaps Resolved</h4>
+          <p style="color:var(--muted);margin-bottom:4px">All detected gaps have been addressed in the file.</p>
+        </div>
+      `;
+    } else {
+      if (S.sugg.stale) h += `<p class="empty" style="margin:0 0 14px">The files changed since AI's review. Run it again for fresh results.</p>`;
+      h += `<div class="cards">${sortS(cl).map(sugCard).join("")}</div>`;
+    }
+
+    if (fixedItems.length){
+      h += `
+        <div style="margin-top:24px;border-top:1px dashed var(--line);padding-top:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <h4 style="margin:0;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--make)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Fixed in file <span class="badge n" style="background:rgba(46,160,67,0.12);color:var(--make);border-color:rgba(46,160,67,0.3);font-weight:600">${fixedItems.length}</span>
+            </h4>
+          </div>
+          <div class="cards">
+            ${fixedItems.map(s => {
+              const chg = S.sugg.fixed ? S.sugg.fixed[s.id] : null;
+              return `<div class="card" style="opacity:0.85;border-left-color:var(--make)">
+                <div class="meta">
+                  <span class="sev low" style="background:rgba(46,160,67,0.12);color:var(--make);border-color:rgba(46,160,67,0.3);font-weight:600">✓ Fixed ${chg ? `· Change #${chg}` : ""}</span>
+                  <span class="cat">${esc(s.cat)}</span>
+                </div>
+                <h4 style="text-decoration:line-through;color:var(--muted)">${esc(s.title)}</h4>
+                ${s.suggestion ? `<p class="fix" style="color:var(--ink);font-size:12.5px;margin-bottom:8px">${esc(s.suggestion)}</p>` : ""}
+                <div class="acts">
+                  <button class="btn sm ghost" type="button" data-sreopen="${esc(s.id)}">Reopen gap</button>
+                  <button class="btn sm ghost" type="button" data-seechg>View change</button>
+                </div>
+              </div>`;
+            }).join("")}
+          </div>
+        </div>
+      `;
+    }
+  }
   $("sugg").innerHTML = h;
   const run = $("suggRun"); if (run) run.onclick = runSuggestions;
   const stop = $("suggStop"); if (stop) stop.onclick = () => suggCtl?.abort();
 }
 $("sugg").addEventListener("click", e => {
   const g = e.target.closest("[data-goto]"); if (g){ goTo(g.dataset.goto, "diagram"); return; }
-  const find = id => allSugg().find(s => s.id === id);
-  const d = e.target.closest("[data-sdis]"); if (d){ S.sugg.dismissed.push(d.dataset.sdis); save(); renderSuggest(); renderSummary(); renderDiagram(); return; }
-  const f = e.target.closest("[data-sfix]"); if (f){ const s = find(f.dataset.sfix); if (!s) return; setScope(s.nodeId || null); openChat(); sendChat(`Fix this gap in the file: ${s.title}. ${s.whatIf || ""} Suggested change: ${s.suggestion}`, {fixId:s.id}); return; }
-  const a = e.target.closest("[data-sask]"); if (a){ const s = find(a.dataset.sask); if (!s) return; setScope(s.nodeId || null); openChat(); $("chatIn").value = `About this gap: ${s.title}. ${s.whatIf || ""} `; $("chatIn").focus(); }
+  const findAny = id => (S.sugg && S.sugg.claude ? S.sugg.claude.find(s => s.id === id) : null);
+  const d = e.target.closest("[data-sdis]");
+  if (d){
+    if (!S.sugg.dismissed) S.sugg.dismissed = [];
+    S.sugg.dismissed.push(d.dataset.sdis);
+    save(); renderSuggest(); renderSummary(); renderDiagram();
+    return;
+  }
+  const r = e.target.closest("[data-sreopen]");
+  if (r){
+    const id = r.dataset.sreopen;
+    if (S.sugg.fixed) delete S.sugg.fixed[id];
+    S.sugg.dismissed = (S.sugg.dismissed || []).filter(x => x !== id);
+    save(); renderSuggest(); renderSummary(); renderDiagram();
+    return;
+  }
+  if (e.target.closest("[data-seechg]")){ setTab("changes"); return; }
+  const f = e.target.closest("[data-sfix]");
+  if (f){
+    const s = findAny(f.dataset.sfix);
+    if (!s) return;
+    f.disabled = true;
+    f.innerHTML = '<span class="btn-spinner"></span> Applying fix…';
+    s._fixing = true;
+    setScope(s.nodeId || null);
+    openChat();
+    sendChat(`Fix this gap in the file: ${s.title}. ${s.whatIf || ""} Suggested change: ${s.suggestion}`, {fixId:s.id});
+    return;
+  }
+  const a = e.target.closest("[data-sask]");
+  if (a){
+    const s = findAny(a.dataset.sask);
+    if (!s) return;
+    setScope(s.nodeId || null);
+    openChat();
+    $("chatIn").value = `About this gap: ${s.title}. ${s.whatIf || ""} `;
+    $("chatIn").focus();
+  }
 });
 async function runSuggestions(){
   if (!sampleFn) return;
   suggCtl?.abort(); suggCtl = new AbortController(); const my = suggCtl;
-  $("suggRun").disabled = true; $("suggStop").hidden = false;
-  const idle = $("suggIdle"); if (idle) idle.textContent = "AI is reviewing the workflow…";
-  const prompt = `Review this workflow document (a Claude skill or Markdown playbook) for gaps that would make it fail or behave unpredictably when followed.
+  const runBtn = $("suggRun");
+  if (runBtn){
+    runBtn.disabled = true;
+    runBtn.innerHTML = '<span class="btn-spinner"></span> Reviewing…';
+  }
+  const stopBtn = $("suggStop");
+  if (stopBtn) stopBtn.hidden = false;
+
+  const isSkill = (typeof isSkillWorkspace === "function" && isSkillWorkspace(S)) || appMode === "skill-flow";
+  const suggArea = $("sugg");
+  
+  const targetBox = document.querySelector("#sugg .sugg-empty-box") || document.querySelector("#sugg .cards");
+  const loaderHtml = `
+    <div class="sugg-analyzing-box" id="suggLoaderBox">
+      <div class="sugg-spinner"></div>
+      <h4>AI is reviewing ${isSkill ? "the workflow playbook" : "the codebase"}…</h4>
+      <p id="suggLoaderMsg">Checking edge cases, unhandled branches, and drafting suggested fixes…</p>
+      <button class="btn sm ghost" type="button" id="suggAbortBtn" style="border-color:var(--pink-border);color:var(--pink);">Cancel review</button>
+    </div>
+  `;
+  if (targetBox){
+    targetBox.outerHTML = loaderHtml;
+  } else if (suggArea) {
+    suggArea.insertAdjacentHTML("beforeend", loaderHtml);
+  }
+  const abortBtn = $("suggAbortBtn");
+  if (abortBtn) abortBtn.onclick = () => suggCtl?.abort();
+
+  showAiBanner(
+    isSkill ? "AI is reviewing the workflow…" : "AI is reviewing the project…",
+    "Checking edge cases, unhandled conditions, and drafting fixes"
+  );
+
+  const prompt = isSkill ? `Review this workflow document (a Claude skill or Markdown playbook) for gaps that would make it fail or behave unpredictably when followed.
 Focus on: conditions with no "otherwise" path (it says what to do if X is present but not if it is absent), missing input validation, missing failure/error handling for scripts, tools and fetches, loops with no exit, ambiguous instructions, outputs that are created but never used or delivered, steps referenced but never defined, and missing final delivery to the user.
 
 Reply with ONLY a JSON array (max 12 items, most important first):
@@ -2726,21 +2908,63 @@ Reply with ONLY a JSON array (max 12 items, most important first):
 
 Workflow outline (numbers match the diagram):
 ${outlineText()}
+${filesBlock(40000)}` : `Review this software project for gaps that would make it fail, confuse new developers, or be hard to run and maintain.
+Focus on: unhandled error paths and missing "otherwise" branches, missing input validation, configuration and secrets handling, missing or misleading documentation (README vs actual code), missing tests for important logic, build/deploy gaps, risky dependencies between components, and security basics.
+
+Reply with ONLY a JSON array (max 12 items, most important first):
+[{"title":"short statement of the gap","severity":"high|medium|low","category":"Error handling|Validation|Docs|Testing|Configuration|Security|Architecture|Delivery|Other","file":"most relevant file path from the tree, or empty","component":"component name from the brief, or empty","step":"step number from the outline, or empty","whatIf":"What happens if ...?","suggestion":"the concrete change to make, 1-2 sentences"}]
+
+${projectBrief()}
 ${filesBlock(40000)}`;
+
   try {
-    const data = await sampleFn.json(prompt, {signal:my.signal, modelTier:"default", cache:false});
+    const data = await sampleFn.json(prompt, {
+      signal: my.signal,
+      modelTier: "default",
+      cache: false,
+      onText: ({text}) => {
+        if (my === suggCtl){
+          const sub = $("suggLoaderMsg");
+          if (sub) sub.textContent = `Analyzing… ${(text.length / 1000).toFixed(1)}k characters received`;
+          updateAiBanner("AI is reviewing gaps…", `${(text.length / 1000).toFixed(1)}k characters received`);
+        }
+      }
+    });
     if (my !== suggCtl) return;
     const list = arr(Array.isArray(data) ? data : data?.items || data?.suggestions);
-    S.sugg.claude = list.filter(x => x && x.title).slice(0, 15).map((x, i) => ({ id:"c-" + Date.now() + "-" + i, sev:["high","medium","low"].includes(String(x.severity).toLowerCase()) ? String(x.severity).toLowerCase() : "medium",
-      cat:String(x.category || "Other"), title:String(x.title), whatIf:String(x.whatIf || ""), suggestion:String(x.suggestion || ""), nodeId:numIndex.get(String(x.step || "").trim()) || null }));
-    S.sugg.stale = false; save();
-    renderSuggest(); renderSummary(); renderDiagram();
+    S.sugg.claude = list.filter(x => x && x.title).slice(0, 15).map((x, i) => {
+      const f = String(x.file || "").trim(), c = String(x.component || "").trim(), st = String(x.step || "").trim();
+      const nodeId = isSkill ? (numIndex.get(st) || null) : ((f && S.files.some(z => z.path === f)) ? "f:" + f : (c && PSEUDO.has("c:" + c)) ? "c:" + c : numIndex.get(st) || null);
+      return {
+        id: "c-" + Date.now() + "-" + i,
+        sev: ["high","medium","low"].includes(String(x.severity).toLowerCase()) ? String(x.severity).toLowerCase() : "medium",
+        cat: String(x.category || "Other"),
+        title: String(x.title),
+        whatIf: String(x.whatIf || ""),
+        suggestion: String(x.suggestion || ""),
+        nodeId
+      };
+    });
+    S.sugg.stale = false;
+    save();
+    renderSuggest();
+    renderSummary();
+    renderDiagram();
   } catch(e){
     if (my !== suggCtl) return;
     renderSuggest();
-    if (e?.code !== "cancelled"){ const el = $("suggErr"); el.hidden = false; el.textContent = errCopy(e?.code, "AI's review failed. Try again."); }
+    if (e?.code !== "cancelled"){
+      const el = $("suggErr");
+      if (el) { el.hidden = false; el.textContent = errCopy(e?.code, "The AI review failed. Try again."); }
+    }
     if (isFatal(e?.code)) disableAI();
-  } finally { if (my === suggCtl){ const r = $("suggRun"); if (r) r.disabled = false; const s = $("suggStop"); if (s) s.hidden = true; } }
+  } finally {
+    if (my === suggCtl){
+      hideAiBanner();
+      const r = $("suggRun"); if (r) { r.disabled = false; r.textContent = S.sugg.claude ? "Review again with AI" : "Find gaps with AI"; }
+      const s = $("suggStop"); if (s) s.hidden = true;
+    }
+  }
 }
 
 /* ================= selection / navigation / tabs ================= */
@@ -2850,6 +3074,13 @@ function undo(){
   S.model = normalize(S.rawModel || quickParse(S.files));
   S.dirty = S.files.some(f => f.edited);
   $("undoBtn").disabled = !S.history.length;
+  if (lc && S.sugg && S.sugg.fixed){
+    const reopenedId = Object.keys(S.sugg.fixed).find(k => S.sugg.fixed[k] === lc.n);
+    if (reopenedId){
+      delete S.sugg.fixed[reopenedId];
+      S.sugg.dismissed = (S.sugg.dismissed || []).filter(id => id !== reopenedId);
+    }
+  }
   S.sugg.stale = true; setStatus(S.mode === "claude" ? "claude" : "quick", "Change undone");
   renderAll(); save(); toast("Undid the last change");
 }
@@ -2890,7 +3121,7 @@ async function readFiles(fileList){
   }
   return out;
 }
-function resetForNewFile(){ S.sel = null; S.chatScope = null; S.highlight = null; S.collapsed.clear(); S.history = []; S.dirty = false; S.changes = []; S.chgView = "history"; S.notes = []; S.chat = []; S.links = []; S.mmPos = {}; S.mmLink = null; S.sugg = {claude:null, stale:false, dismissed:[]}; S.editing = false; S.fitted = {diagram:false, mindmap:false}; $("undoBtn").disabled = true; }
+function resetForNewFile(){ S.sel = null; S.chatScope = null; S.highlight = null; S.collapsed.clear(); S.history = []; S.dirty = false; S.changes = []; S.chgView = "history"; S.notes = []; S.chat = []; S.links = []; S.mmPos = {}; S.mmLink = null; S.sugg = {claude:null, stale:false, dismissed:[], fixed:{}}; S.editing = false; S.fitted = {diagram:false, mindmap:false}; $("undoBtn").disabled = true; }
 async function load(files){
   showErr("");
   files = files.filter(f => f.text && f.text.trim());
@@ -2906,8 +3137,12 @@ async function load(files){
 }
 function afterFileChange(why){
   S.sugg.stale = true;
-  if (sampleFn && $("aiToggle").checked){ renderSource(); updateDl(); save(); analyze(true); }
-  else { S.rawModel = null; S.model = normalize(quickParse(S.files)); S.mode = "quick"; setStatus("quick", why + " · quick map"); renderAll(); save(); }
+  const isSkill = (typeof isSkillWorkspace === "function" && isSkillWorkspace(S)) || appMode === "skill-flow";
+  if (!isSkill) analyzeProject();
+  S.model = normalize(S.rawModel || quickParse(S.files));
+  setStatus(S.mode === "claude" ? "claude" : "quick", why + (sampleFn ? " · press Re-map to refresh diagrams" : ""));
+  renderAll(); save();
+  if (isSkill && sampleFn && $("aiToggle")?.checked){ analyze(true); }
 }
 $("uploadBtn").onclick = () => $("fileInput").click();
 $("fileInput").onchange = async e => { const fl = [...e.target.files]; e.target.value = ""; if (fl.length) load(await readFiles(fl)); };
@@ -2953,20 +3188,60 @@ Rules:
 Document:
 ${filesBlock(48000)}`;
 }
+function showAiBanner(title, sub){
+  const b = $("aiBanner");
+  if (!b) return;
+  const t = $("aiBannerTitle");
+  const s = $("aiBannerSub");
+  if (t) t.textContent = title;
+  if (s) s.textContent = sub || "";
+  b.hidden = false;
+}
+function updateAiBanner(title, sub){
+  const t = $("aiBannerTitle");
+  const s = $("aiBannerSub");
+  if (t && title) t.textContent = title;
+  if (s && sub) s.textContent = sub;
+}
+function hideAiBanner(){
+  const b = $("aiBanner");
+  if (b) b.hidden = true;
+}
+
 async function analyze(afterEdit){
   if (!sampleFn) return;
   mapCtl?.abort(); mapCtl = new AbortController(); const my = mapCtl;
-  showErr(""); setStatus("busy", afterEdit ? "File changed · AI is redrawing the map…" : "AI is reading the file…");
-  $("aiBtn").disabled = true; $("stopBtn").hidden = false;
+  showErr("");
+  const title = afterEdit ? "Updating map with AI…" : "AI is reading and mapping…";
+  const sub = (typeof isSkillWorkspace === "function" && isSkillWorkspace(S)) || appMode === "skill-flow"
+    ? "Analyzing workflow steps and decision branches"
+    : "Analyzing code architecture, routes and dependencies";
+  setStatus("busy", title);
+  showAiBanner(title, sub);
+  if ($("aiBtn")){
+    $("aiBtn").disabled = true;
+    $("aiBtn").innerHTML = '<span class="btn-spinner"></span> Mapping…';
+  }
+  $("stopBtn").hidden = false;
   try {
     const data = await sampleFn.json(mapPrompt(), { signal:my.signal, modelTier:"default",
-      onText:({text}) => { if (my === mapCtl) setStatus("busy", `AI is mapping the flow… ${(text.length / 1000).toFixed(1)}k chars`); } });
+      onText:({text}) => {
+        if (my === mapCtl) {
+          const kc = (text.length / 1000).toFixed(1);
+          setStatus("busy", `AI is mapping… ${kc}k chars`);
+          updateAiBanner("AI is mapping…", `${kc}k characters analyzed`);
+        }
+      }
+    });
     if (my !== mapCtl) return;
-    if (!data || !Array.isArray(data.steps) || !data.steps.length) throw {code:"invalid_json"};
+    if (!data || (!Array.isArray(data.steps) && !Array.isArray(data.components))) throw {code:"invalid_json"};
+    data.steps = arr(data.steps);
     const prevNum = S.sel && getNode(S.sel)?.num;
     S.rawModel = data; S.model = normalize(data); S.mode = "claude";
-    S.sel = prevNum && numIndex.get(prevNum) || null; S.chatScope = S.chatScope && S.sel;
+    S.sel = (prevNum && numIndex.get(prevNum)) || (S.sel && PSEUDO.has(S.sel) ? S.sel : null);
+    S.chatScope = S.chatScope && getNode(S.chatScope) ? S.chatScope : null;
     S.collapsed.clear();
+    if (S.fitted) S.fitted.arch = false;
     setStatus("claude", afterEdit ? "Map updated by AI" : "Mapped by AI"); renderAll(); save();
   } catch(e){
     if (my !== mapCtl) return;
@@ -2974,7 +3249,16 @@ async function analyze(afterEdit){
     if (afterEdit){ S.rawModel = null; S.model = normalize(quickParse(S.files)); S.mode = "quick"; renderAll(); save(); }
     if (code === "cancelled") setStatus("quick", "Quick map (AI stopped)");
     else { setStatus("quick", "Quick map"); showErr(errCopy(code, "AI mapping failed. The quick map is shown; you can try again.")); if (isFatal(code)) disableAI(); }
-  } finally { if (my === mapCtl){ $("aiBtn").disabled = false; $("stopBtn").hidden = true; } }
+  } finally {
+    if (my === mapCtl){
+      hideAiBanner();
+      if ($("aiBtn")){
+        $("aiBtn").disabled = false;
+        $("aiBtn").textContent = "Re-map with AI";
+      }
+      $("stopBtn").hidden = true;
+    }
+  }
 }
 $("aiBtn").onclick = () => analyze();
 $("stopBtn").onclick = () => mapCtl?.abort();
@@ -3101,7 +3385,17 @@ async function sendChat(text, opts = {}){
     if (e?.code === "cancelled"){ ai.text = (e.text ? parseReply(e.text).display + "\n\n" : "") + "(Stopped)"; }
     else { ai.error = true; ai.text = (e?.text ? parseReply(e.text).display + "\n\n" : "") + errCopy(e?.code, "AI couldn't answer. Try again."); if (isFatal(e?.code)) disableAI(); }
     updateMsg(idx); save();
-  } finally { if (my === chatCtl){ $("chatStop").hidden = true; $("chatSend").disabled = !sampleFn; } }
+  } finally {
+    if (my === chatCtl){
+      $("chatStop").hidden = true;
+      $("chatSend").disabled = !sampleFn;
+      if (opts.fixId && S.sugg && S.sugg.claude){
+        const s = S.sugg.claude.find(x => x.id === opts.fixId);
+        if (s && ai.status !== "applied") delete s._fixing;
+        if (typeof renderSuggest === "function") renderSuggest();
+      }
+    }
+  }
 }
 function applyEdit(text, find, replace){
   if (find === "") return null;
@@ -3133,9 +3427,22 @@ function applyMsg(i, rerender = true){
   const c = recordChange(before, S.files, {source:m.noteIds ? "notefix" : m.fixId ? "suggestion" : "chat", summary:firstSentence(m.text), request:u ? u.text : "", scope:u ? u.scope : null});
   if (c){ m.changeN = c.n; m.changeFiles = c.files; }
   if (c && m.noteIds){ m.noteIds.forEach(id => { const n = S.notes.find(x => x.id === id); if (n){ n.status = "resolved"; n.resolvedBy = c.n; } }); updateNotesBadge(); }
+  if (m.fixId){
+    if (!S.sugg) S.sugg = {claude:null, stale:false, dismissed:[], fixed:{}};
+    if (!Array.isArray(S.sugg.dismissed)) S.sugg.dismissed = [];
+    if (!S.sugg.dismissed.includes(m.fixId)) S.sugg.dismissed.push(m.fixId);
+    if (!S.sugg.fixed) S.sugg.fixed = {};
+    S.sugg.fixed[m.fixId] = c ? c.n : (m.changeN || 1);
+    if (S.sugg.claude){
+      const s = S.sugg.claude.find(x => x.id === m.fixId);
+      if (s) delete s._fixing;
+    }
+    save();
+  }
   if (rerender) updateMsg(i);
   toast(c ? `Change #${c.n} applied. Download the file or the whole project from the chat card.` : "File updated");
   afterFileChange("File updated");
+  if (typeof renderSuggest === "function") renderSuggest();
 }
 $("msgs").addEventListener("click", e => {
   const a = e.target.closest("[data-apply]"); if (a){ applyMsg(+a.dataset.apply); return; }
@@ -4535,33 +4842,12 @@ Likely entry points: ${P.entries.join(", ") || "(none detected)"}
 ${heads}
 ${filesBlock(40000)}`;
 }
-async function analyze(afterEdit){
-  if (!sampleFn) return;
-  mapCtl?.abort(); mapCtl = new AbortController(); const my = mapCtl;
-  showErr(""); setStatus("busy", "AI is reading the project…");
-  $("aiBtn").disabled = true; $("stopBtn").hidden = false;
-  try {
-    const data = await sampleFn.json(mapPrompt(), {signal:my.signal, modelTier:"default",
-      onText:({text}) => { if (my === mapCtl) setStatus("busy", `AI is mapping the project… ${(text.length / 1000).toFixed(1)}k chars`); }});
-    if (my !== mapCtl) return;
-    if (!data || (!Array.isArray(data.steps) && !Array.isArray(data.components))) throw {code:"invalid_json"};
-    data.steps = arr(data.steps);
-    const prevNum = S.sel && getNode(S.sel)?.num;
-    S.rawModel = data; S.model = normalize(data); S.mode = "claude";
-    S.sel = (prevNum && numIndex.get(prevNum)) || (S.sel && PSEUDO.has(S.sel) ? S.sel : null); S.chatScope = S.chatScope && getNode(S.chatScope) ? S.chatScope : null;
-    S.collapsed.clear(); S.fitted.arch = false;
-    setStatus("claude", "Mapped by AI"); renderAll(); save();
-  } catch(e){
-    if (my !== mapCtl) return;
-    const code = e?.code;
-    if (code === "cancelled") setStatus("quick", "Quick map (AI stopped)");
-    else { setStatus("quick", "Quick map"); showErr(errCopy(code, "AI mapping failed. The quick map is shown; you can try again.")); if (isFatal(code)) disableAI(); }
-  } finally { if (my === mapCtl){ $("aiBtn").disabled = false; $("stopBtn").hidden = true; } }
-}
+
+
 function errCopy(code, fallback){ return ({rate_limited:"Too many requests right now. Wait a minute and try again.", prompt_too_large:"The project is too large for one request. The map uses the README, manifests and key files; try again or map a sub-folder.", invalid_json:"The answer couldn't be read. Try again.", session_expired:"Your session expired. Sign in again, then retry.", refused:"The request was declined.", not_granted:"AI isn't available here, so the quick map is used.", sampling_disabled:"AI isn't available for this account.", invalid_key:"The API key was rejected. Check it in AI settings.", no_key:"Add an API key in AI settings first.", overloaded:"The AI service is overloaded right now. Try again shortly.", model_not_found:"That model isn't available for your key. Pick another in AI settings.", network:"Couldn't reach the AI provider. Check your connection.", quota:"This key has no credit or quota left.", bad_request:"The request was rejected. Try a different model."}[code]) || fallback; }
 
 /* ---------- loading ---------- */
-function resetForNewFile(){ S.sel = null; S.chatScope = null; S.highlight = null; S.collapsed.clear(); S.history = []; S.dirty = false; S.changes = []; S.chgView = "history"; S.notes = []; S.chat = []; S.links = []; S.mmPos = {}; S.mmLink = null; S.sugg = {claude:null, stale:false, dismissed:[]}; S.editing = false; S.fitted = {diagram:false, mindmap:false, arch:false, flows:false}; S.treeOpen = new Set(); S.archLevel = null; S.flowIdx = 0; S.flowStep = null; S.flowMode = "overview"; S.customFlows = []; S.aiEntries = []; $("undoBtn").disabled = true; RC.cache && RC.cache.clear(); }
+function resetForNewFile(){ S.sel = null; S.chatScope = null; S.highlight = null; S.collapsed.clear(); S.history = []; S.dirty = false; S.changes = []; S.chgView = "history"; S.notes = []; S.chat = []; S.links = []; S.mmPos = {}; S.mmLink = null; S.sugg = {claude:null, stale:false, dismissed:[], fixed:{}}; S.editing = false; S.fitted = {diagram:false, mindmap:false, arch:false, flows:false}; S.treeOpen = new Set(); S.archLevel = null; S.flowIdx = 0; S.flowStep = null; S.flowMode = "overview"; S.customFlows = []; S.aiEntries = []; $("undoBtn").disabled = true; RC.cache && RC.cache.clear(); }
 async function load(r){
   showErr("");
   if (!r || !r.files || !r.files.length){ showErr("No readable text files were found. Open the project's root folder, or upload a .zip of it."); setStatus("quick", "Nothing loaded"); return; }
@@ -4583,12 +4869,7 @@ async function load(r){
   renderAll(); save();
   if (sampleFn && $("aiToggle").checked) analyze();
 }
-function afterFileChange(why){
-  S.sugg.stale = true; analyzeProject();
-  S.model = normalize(S.rawModel || quickParse(S.files));
-  setStatus(S.mode === "claude" ? "claude" : "quick", why + (sampleFn ? " · press Re-map to refresh the diagrams" : ""));
-  renderAll(); save();
-}
+
 $("fileInput").onchange = async e => { const fl = [...e.target.files]; e.target.value = ""; if (fl.length) load(await readFiles(fl)); };
 $("folderInput").onchange = async e => { const fl = [...e.target.files]; e.target.value = ""; if (fl.length) load(await readFiles(fl)); };
 $("folderBtn").onclick = () => $("folderInput").click();
@@ -4652,14 +4933,8 @@ function openFile(path, opts = {}){
   $("srcWrap").scrollTop = 0; updateDl();
   select("f:" + path);
 }
-
 /* ---------- summary & side ---------- */
-function renderSummary(){
-  const m = S.model, P = S.project || analyzeProject(), gaps = suggCount();
-  $("summary").innerHTML = `<div><span class="eyebrow">Project · ${esc(S.projectName || "")}</span><h2>${esc(m.title)}</h2>${m.summary ? `<p class="desc">${esc(m.summary)}</p>` : ""}${m.trigger ? `<div class="trigger"><span class="eyebrow">Used by</span><span>${esc(m.trigger)}</span></div>` : ""}</div>
-  <div class="stats"><div class="stat s"><b>${(m.components || []).length}</b><span>components</span></div><div class="stat l"><b>${P.total.toLocaleString()}</b><span>files</span></div><div class="stat d"><b>${P.lines >= 10000 ? Math.round(P.lines / 1000) + "k" : P.lines.toLocaleString()}</b><span>lines</span></div><div class="stat m"><b>${P.tests.length}</b><span>test files</span></div><div class="stat g"><b>${gaps}</b><span>possible gaps</span></div></div>`;
-  $("suggBadge").hidden = !gaps; $("suggBadge").textContent = gaps;
-}
+
 function renderDetail(){
   const n = S.sel && getNode(S.sel);
   if (!n){ $("detail").innerHTML = `<h3>Details</h3><p class="empty">Click a component in Architecture, a file in Structure, or a step in How it runs to see its details here. Then ask the AI about it or open it.</p><div class="acts"><button class="btn sm" type="button" data-ask="overview">Explain the whole project</button><button class="btn sm" type="button" data-ask="run">How do I run it?</button></div>`; return; }
@@ -4737,62 +5012,8 @@ ${sc}
 Project files:${filesBlock(36000)}`;
 }
 
-/* ---------- suggestions ---------- */
-function localChecks(){
-  const P = S.project || analyzeProject(), out = [], add = s => { if (!S.sugg.dismissed.includes(s.id)) out.push(s); };
-  const readme = S.files.find(f => isReadme(f.path) && !f.path.includes("/"));
-  if (!readme) add({id:"p-noreadme", sev:"high", cat:"Docs", nodeId:null, title:"No README at the project root", whatIf:"How does a new developer know what this is and how to run it?", suggestion:"Add a README.md with what the project does, how to install and run it, configuration, and how to run tests."});
-  else {
-    const t = readme.text.toLowerCase(), need = [["install|getting started|setup|set up", "how to install or set it up", "high"], ["usage|run|start|how to use", "how to run or use it", "high"], ["test", "how to run the tests", "medium"], ["config|environment|env var|\\.env", "configuration and environment variables", "medium"], ["licen", "the license", "low"], ["contribut", "how to contribute", "low"]];
-    need.forEach(([re, what, sev], i) => { if (!new RegExp(re).test(t)) add({id:"p-readme-" + i, sev, cat:"Docs", nodeId:"f:" + readme.path, title:`README doesn't explain ${what}`, whatIf:`What does a newcomer do when they need ${what}?`, suggestion:`Add a short section to README.md covering ${what}.`}); });
-    const all = new Set([...S.files.map(f => f.path), ...(S.bins || []).map(b => b.path)]), dirs = new Set([...all].flatMap(p => { const s = p.split("/"); return s.slice(1).map((_, i) => s.slice(0, i + 1).join("/")); }));
-    const refs = new Set([...readme.text.matchAll(/`([\w./-]+\/[\w.-]+|[\w-]+\.(?:js|ts|py|go|rs|md|json|ya?ml|toml|sh|sql|example)|\.env\.\w+)`|\]\((?!https?:|#|mailto:)([^)\s#]+)\)/g)].map(m => (m[1] || m[2] || "").replace(/^\.\//, "").replace(/\/$/, "")).filter(Boolean));
-    [...refs].filter(r => !all.has(r) && !dirs.has(r) && !/^(https?|www)/.test(r) && !/[<>*]/.test(r)).slice(0, 5).forEach(r => add({id:"p-ref-" + r, sev:"medium", cat:"Docs out of date", nodeId:"f:" + readme.path, title:`README mentions ${r}, which isn't in the project`, whatIf:`What happens when someone follows the README and ${r} isn't there?`, suggestion:`Add ${r}, or fix the README to point at the right file.`}));
-    const pkg = S.files.find(f => f.path === "package.json");
-    if (pkg){ try { const sc = Object.keys(JSON.parse(pkg.text).scripts || {}); const missing = sc.filter(k => !t.includes(k)).slice(0, 4); if (missing.length) add({id:"p-scripts", sev:"low", cat:"Docs", nodeId:"f:" + readme.path, title:`package.json scripts not mentioned in the README: ${missing.join(", ")}`, whatIf:"Will people know these commands exist and what they do?", suggestion:"List the useful npm scripts in the README with one line each."}); } catch(e){} }
-  }
-  if (!P.license) add({id:"p-license", sev:"low", cat:"Project hygiene", nodeId:null, title:"No LICENSE file", whatIf:"Can others legally use or contribute to this code?", suggestion:"Add a LICENSE file (or state that the project is private/internal)."});
-  if (!P.tests.length) add({id:"p-notests", sev:"high", cat:"Testing", nodeId:null, title:"No tests found", whatIf:"How do you know a change didn't break something?", suggestion:"Add a test folder with tests for the core logic, and a test command."});
-  if (!P.ci.length) add({id:"p-noci", sev:"medium", cat:"Delivery", nodeId:null, title:"No CI pipeline found", whatIf:"What stops a broken change from being merged?", suggestion:"Add a CI workflow that installs, lints and runs the tests on every push."});
-  if (P.envVars.length && !P.envExample) add({id:"p-envex", sev:"medium", cat:"Configuration", nodeId:null, title:`Code reads ${P.envVars.length} environment variable${P.envVars.length === 1 ? "" : "s"} but there's no .env.example`, whatIf:`What happens if ${P.envVars.slice(0, 3).join(", ")} isn't set?`, suggestion:`Add a .env.example listing ${P.envVars.slice(0, 8).join(", ")}, and validate required variables at startup.`});
-  (S.model.components || []).forEach(c => { const st = compStats(c); if (st.files >= 12 && !st.readme && c.kind !== "tests" && c.kind !== "docs") add({id:"p-cdoc-" + c.name, sev:"low", cat:"Docs", nodeId:"c:" + c.name, title:`${c.name} has ${st.files} files but no README`, whatIf:"How does someone learn what this part does without reading all of it?", suggestion:`Add a short README in ${c.path || "this folder"} explaining its purpose and main files.`}); });
-  const deps = compDeps(), has = new Set(deps.map(d => d.from + ">" + d.to));
-  deps.forEach(d => { if (d.from < d.to && has.has(d.to + ">" + d.from)) add({id:"p-cycle-" + d.from + d.to, sev:"medium", cat:"Architecture", nodeId:"c:" + d.from, title:`${d.from} and ${d.to} depend on each other`, whatIf:"What breaks when one of them changes, and which one owns the shared logic?", suggestion:"Move the shared part into its own module or invert one dependency."}); });
-  if (P.todos.length){ const n = P.todos.reduce((a, t) => a + t.n, 0); add({id:"p-todos", sev:"low", cat:"Code health", nodeId:"f:" + P.todos[0].path, title:`${n} TODO/FIXME comment${n === 1 ? "" : "s"} in ${P.todos.length} file${P.todos.length === 1 ? "" : "s"}`, whatIf:"Are any of these known bugs that users will hit?", suggestion:`Review them, starting with ${P.todos.slice(0, 3).map(t => t.path).join(", ")}.`}); }
-  P.big.slice(0, 3).forEach(b => add({id:"p-big-" + b.path, sev:"low", cat:"Code health", nodeId:"f:" + b.path, title:`${b.path} is ${b.lines.toLocaleString()} lines long`, whatIf:"Is it still easy to change safely?", suggestion:"Consider splitting it into smaller modules by responsibility."}));
-  try { localChecksFlow().filter(s => s.cat === "Missing branch").forEach(s => add({...s, id:"p-" + s.id, title:s.title.replace("only says what to do in one case", "only handles one case")})); } catch(e){}
-  return out;
-}
-async function runSuggestions(){
-  if (!sampleFn) return;
-  suggCtl?.abort(); suggCtl = new AbortController(); const my = suggCtl;
-  $("suggRun").disabled = true; $("suggStop").hidden = false;
-  const idle = $("suggIdle"); if (idle) idle.textContent = "AI is reviewing the project…";
-  const prompt = `Review this software project for gaps that would make it fail, confuse new developers, or be hard to run and maintain.
-Focus on: unhandled error paths and missing "otherwise" branches, missing input validation, configuration and secrets handling, missing or misleading documentation (README vs actual code), missing tests for important logic, build/deploy gaps, risky dependencies between components, and security basics.
 
-Reply with ONLY a JSON array (max 12 items, most important first):
-[{"title":"short statement of the gap","severity":"high|medium|low","category":"Error handling|Validation|Docs|Testing|Configuration|Security|Architecture|Delivery|Other","file":"most relevant file path from the tree, or empty","component":"component name from the brief, or empty","step":"step number from the outline, or empty","whatIf":"What happens if ...?","suggestion":"the concrete change to make, 1-2 sentences"}]
 
-${projectBrief()}
-${filesBlock(40000)}`;
-  try {
-    const data = await sampleFn.json(prompt, {signal:my.signal, modelTier:"default", cache:false});
-    if (my !== suggCtl) return;
-    const list = arr(Array.isArray(data) ? data : data?.items || data?.suggestions);
-    S.sugg.claude = list.filter(x => x && x.title).slice(0, 15).map((x, i) => {
-      const f = String(x.file || "").trim(), c = String(x.component || "").trim(), st = String(x.step || "").trim();
-      const nodeId = (f && S.files.some(z => z.path === f)) ? "f:" + f : (c && PSEUDO.has("c:" + c)) ? "c:" + c : numIndex.get(st) || null;
-      return {id:"c-" + Date.now() + "-" + i, sev:["high","medium","low"].includes(String(x.severity).toLowerCase()) ? String(x.severity).toLowerCase() : "medium", cat:String(x.category || "Other"), title:String(x.title), whatIf:String(x.whatIf || ""), suggestion:String(x.suggestion || ""), nodeId};
-    });
-    S.sugg.stale = false; save(); renderSuggest(); renderSummary(); renderDiagram();
-  } catch(e){
-    if (my !== suggCtl) return;
-    renderSuggest();
-    if (e?.code !== "cancelled"){ const el = $("suggErr"); el.hidden = false; el.textContent = errCopy(e?.code, "The review failed. Try again."); }
-    if (isFatal(e?.code)) disableAI();
-  } finally { if (my === suggCtl){ const r = $("suggRun"); if (r) r.disabled = false; const s = $("suggStop"); if (s) s.hidden = true; } }
-}
 
 /* ---------- Overview ---------- */
 function renderOverview(){
@@ -6066,7 +6287,7 @@ function captureWorkspace(){
     mmPos: { ...S.mmPos },
     mmOpts: { ...S.mmOpts },
     mmLink: S.mmLink,
-    sugg: { ...S.sugg },
+    sugg: { ...S.sugg, dismissed: [...(S.sugg?.dismissed || [])], fixed: { ...(S.sugg?.fixed || {}) } },
     editing: S.editing,
     changes: [...S.changes],
     notes: [...S.notes],
@@ -6087,6 +6308,7 @@ function captureWorkspace(){
 
 function restoreWorkspace(snap){
   if (!snap) return;
+  resetForNewFile();
   Object.assign(S, snap);
   if (S.model && S.model.steps){
     index.clear();
@@ -6138,31 +6360,61 @@ function initProjectWorkspace(){
   analyzeProject();
   S.rawModel = EXAMPLE_PROJECT_MODEL;
   S.model = normalize(EXAMPLE_PROJECT_MODEL);
-  S.mode = "claude";
+  S.mode = "quick";
   S.tab = S.flows && S.flows.length ? "flows" : "overview";
   setStatus("example", "Example project · open your own folder");
   projectWorkspaceSnapshot = captureWorkspace();
 }
 
-function parseHashRoute(){
-  const raw = (location.hash || "").replace(/^#\/?/, "");
-  if (raw === "skill-flow" || raw === "skill") return { mode: "skill-flow", section: null };
-  if (raw === "project-flow" || raw === "project") return { mode: "project-flow", section: null };
+function parseAppRoute(){
+  const path = (location.pathname || "/").toLowerCase().replace(/\/+$/, "") || "/";
+  const pathSegments = path.split("/").filter(Boolean);
+  const firstSeg = pathSegments[0] || "";
+
+  if (firstSeg === "skill-flow-mapper" || firstSeg === "skill-flow" || firstSeg === "skill") {
+    return { mode: "skill-flow", section: null };
+  }
+  if (firstSeg === "project-flow-mapper" || firstSeg === "project-flow" || firstSeg === "project") {
+    return { mode: "project-flow", section: null };
+  }
+
+  const raw = (location.hash || "").replace(/^#\/?/, "").toLowerCase();
+  if (raw === "skill-flow-mapper" || raw === "skill-flow" || raw === "skill") return { mode: "skill-flow", section: null };
+  if (raw === "project-flow-mapper" || raw === "project-flow" || raw === "project") return { mode: "project-flow", section: null };
   if (raw === "what-it-is" || raw === "humans-ai" || raw === "tools") return { mode: "hub", section: raw };
   return { mode: "hub", section: null };
 }
+const parseHashRoute = parseAppRoute;
 
 function navigateTo(route, options = {}){
-  let targetHash = "#/";
-  if (route === "skill-flow") targetHash = "#/skill-flow";
-  else if (route === "project-flow") targetHash = "#/project-flow";
-  else if (route === "hub" && options.section) targetHash = "#" + options.section;
+  if (location.protocol === "file:"){
+    let targetHash = "#/";
+    if (route === "skill-flow") targetHash = "#/skill-flow-mapper";
+    else if (route === "project-flow") targetHash = "#/project-flow-mapper";
+    else if (route === "hub" && options.section) targetHash = "#" + options.section;
 
-  if (location.hash !== targetHash){
-    location.hash = targetHash;
-  } else {
-    handleRoute();
+    if (location.hash !== targetHash){
+      location.hash = targetHash;
+    } else {
+      handleRoute();
+    }
+    return;
   }
+
+  let targetUrl = "/";
+  if (route === "skill-flow") targetUrl = "/skill-flow-mapper";
+  else if (route === "project-flow") targetUrl = "/project-flow-mapper";
+  else if (route === "hub" && options.section) targetUrl = "/#" + options.section;
+
+  const currentUrl = (location.pathname.replace(/\/+$/, "") || "/") + (location.hash || "");
+  if (currentUrl !== targetUrl && (location.pathname !== targetUrl || (options.section && location.hash !== "#" + options.section))){
+    try {
+      history.pushState(null, "", targetUrl);
+    } catch(e) {
+      location.hash = targetUrl;
+    }
+  }
+  handleRoute();
 }
 
 function setAppMode(mode, options = {}){
@@ -6241,6 +6493,7 @@ function setAppMode(mode, options = {}){
     if (["overview", "flows", "arch", "structure", "notes"].includes(S.tab)) setTab("diagram");
     else setTab(S.tab || "diagram");
 
+    setStatus(S.isExample ? "example" : (S.mode === "claude" ? "claude" : "quick"), S.isExample ? "Example skill · PR Review Playbook" : (S.mode === "claude" ? "Mapped by AI" : "Quick map"));
     renderAll();
     window.scrollTo({ top: 0, behavior: "auto" });
   } else if (mode === "project-flow"){
@@ -6281,14 +6534,22 @@ function setAppMode(mode, options = {}){
     else if (["diagram", "mindmap"].includes(S.tab)) setTab(S.flows && S.flows.length ? "flows" : "overview");
     else setTab(S.tab || "overview");
 
+    setStatus(S.isExample ? "example" : (S.mode === "claude" ? "claude" : "quick"), S.isExample ? "Example project · open your own folder" : (S.mode === "claude" ? "Mapped by AI" : "Quick map"));
     renderAll();
     window.scrollTo({ top: 0, behavior: "auto" });
   }
 }
 
 function handleRoute(){
-  const { mode, section } = parseHashRoute();
+  const { mode, section } = parseAppRoute();
   setAppMode(mode, { section });
+  if (location.protocol !== "file:"){
+    if (mode === "skill-flow" && location.pathname !== "/skill-flow-mapper"){
+      try { history.replaceState(null, "", "/skill-flow-mapper"); } catch(e){}
+    } else if (mode === "project-flow" && location.pathname !== "/project-flow-mapper"){
+      try { history.replaceState(null, "", "/project-flow-mapper"); } catch(e){}
+    }
+  }
 }
 window.addEventListener("hashchange", handleRoute);
 window.addEventListener("popstate", handleRoute);
@@ -6323,7 +6584,7 @@ function loadProjectExample(which){
   analyzeProject();
   S.rawModel = EXAMPLE_PROJECT_MODEL;
   S.model = normalize(EXAMPLE_PROJECT_MODEL);
-  S.mode = "claude";
+  S.mode = "quick";
   S.tab = S.flows && S.flows.length ? "flows" : "overview";
   setStatus("example", "Example project · open your own folder");
   projectWorkspaceSnapshot = captureWorkspace();
@@ -6444,8 +6705,8 @@ function initHubAndGit(){
       navigateTo("hub");
     } else {
       window.scrollTo({ top: 0, behavior: "smooth" });
-      if (location.hash && location.hash !== "#/" && location.hash !== "#") {
-        history.replaceState(null, "", "#/");
+      if (location.pathname !== "/" || (location.hash && location.hash !== "" && location.hash !== "#")) {
+        try { history.replaceState(null, "", "/"); } catch(e){}
       }
     }
   };
@@ -6690,7 +6951,7 @@ function initHubAndGit(){
   if (!restored){
     S.isExample = true; S.files = EXAMPLE_PROJECT.map(f => ({path:f.path, text:f.text, size:f.text.length})); S.bins = []; S.projectName = "order-checkout-api";
     S.activeFile = Math.max(0, S.files.findIndex(f => f.path === "README.md")); S.original = S.files.map(f => ({path:f.path, text:f.text}));
-    analyzeProject(); S.rawModel = EXAMPLE_PROJECT_MODEL; S.model = normalize(EXAMPLE_PROJECT_MODEL); S.mode = "claude";
+    analyzeProject(); S.rawModel = EXAMPLE_PROJECT_MODEL; S.model = normalize(EXAMPLE_PROJECT_MODEL); S.mode = "quick";
     setStatus("example", "Example project · open your own folder");
   }
 
@@ -6701,7 +6962,7 @@ function initHubAndGit(){
     projectWorkspaceSnapshot = {
       files: projFiles, bins: [], projectName: "order-checkout-api",
       activeFile: Math.max(0, projFiles.findIndex(f => f.path === "README.md")), original: projFiles.map(f => ({path:f.path, text:f.text})),
-      rawModel: EXAMPLE_PROJECT_MODEL, model: normalize(EXAMPLE_PROJECT_MODEL), mode: "claude",
+      rawModel: EXAMPLE_PROJECT_MODEL, model: normalize(EXAMPLE_PROJECT_MODEL), mode: "quick",
       tab: "flows", isExample: true, collapsed: new Set(), treeOpen: new Set(),
       sugg: {claude:null, stale:false, dismissed:[]}, changes: [], notes: [], chat: [], links: [], mmPos: {}, fitted: {}
     };
@@ -6721,6 +6982,7 @@ function initHubAndGit(){
   loadSettings(); applyKeyState();
   renderChat(); setSide("details");
   initHubAndGit();
+  window.__SF = { S, applyMsg, allSugg, suggCount, renderSuggest, renderSummary, renderDiagram };
   handleRoute();
 })();
 })();

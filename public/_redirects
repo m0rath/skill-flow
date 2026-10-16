@@ -1,0 +1,8 @@
+/skill-flow-mapper     /index.html   200
+/skill-flow-mapper/*   /index.html   200
+/project-flow-mapper   /index.html   200
+/project-flow-mapper/* /index.html   200
+/skill-flow            /index.html   200
+/skill-flow/*          /index.html   200
+/project-flow          /index.html   200
+/project-flow/*        /index.html   200
