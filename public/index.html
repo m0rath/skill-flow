@@ -839,6 +839,30 @@ html {
   border-color: var(--wire);
 }
 
+.btn-hero-secondary {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  font-family: var(--sans);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.btn-hero-secondary:hover {
+  border-color: var(--pink);
+  color: var(--pink);
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
+
 /* Hero Right: Mockup Window */
 .mockup-window {
   background: var(--surface);
@@ -865,15 +889,34 @@ html {
 }
 .mockup-tabs {
   display: flex;
-  gap: 16px;
+  gap: 10px;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--faint);
   letter-spacing: 0.05em;
 }
-.m-tab.active {
+.m-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.m-tab:hover {
   color: var(--ink);
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+.m-tab.active {
+  color: var(--pink);
   font-weight: 700;
+  background: var(--pink-bg);
+  border-color: var(--pink-border);
 }
 
 .mockup-steps {
@@ -1133,7 +1176,12 @@ html {
   grid-template-columns: 1.25fr 1fr;
   gap: 36px;
   align-items: center;
-  transition: transform 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+.tool-banner-card:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 3px;
 }
 @media (max-width: 820px) {
   .tool-banner-card {
@@ -1145,6 +1193,7 @@ html {
 .tool-banner-card:hover {
   border-color: var(--pink);
   transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
 }
 .badge-avail {
   display: inline-block;
@@ -1399,8 +1448,6 @@ html {
     <nav class="hub-nav" id="hubNav">
       <a href="#what-it-is" class="hub-nav-link">What it is</a>
       <a href="#humans-ai" class="hub-nav-link">Humans + AI</a>
-      <a href="#tools" class="hub-nav-link">Tools</a>
-      <button class="btn btn-pink" id="headerOpenToolBtn" type="button">Open the tool</button>
     </nav>
     <nav class="mode-nav" role="navigation" aria-label="Tool selection">
       <button class="mode-pill active" id="navHub" type="button" data-route="hub">
@@ -1434,18 +1481,18 @@ html {
     <!-- 1. Hero Section -->
     <div class="landing-hero">
       <div class="hero-left">
-        <span class="eyebrow-tag">TOOLS FOR PEOPLE WHO WORK WITH AI</span>
+        <span class="eyebrow-tag">VISUAL TOOLS FOR AI SKILLS &amp; SOFTWARE PROJECTS</span>
         <h1 class="hero-title">
           AI drafts.<br>
           Humans<br>
           <span class="pink-text">decide.</span>
         </h1>
         <p class="hero-desc">
-          justools builds small, sharp tools that make AI instructions visible. Map a skill or playbook, question it, fix it, and keep a person in charge of every change.
+          justools turns invisible instructions into visible workflows. Map an AI skill or an entire codebase, let AI question what's missing, review every suggestion, and download the result.
         </p>
         <div class="hero-cta-group">
-          <button type="button" class="btn-pink" id="heroLaunchSkill">Open Skill Flow Mapper &rarr;</button>
-          <a href="#what-it-is" class="btn-ghost">See how it works</a>
+          <button type="button" class="btn-pink" id="heroOpenSkill">Open Skill Flow &rarr;</button>
+          <button type="button" class="btn-hero-secondary" id="heroOpenProject">Open Project Flow &rarr;</button>
         </div>
       </div>
 
@@ -1454,48 +1501,97 @@ html {
         <div class="mockup-window">
           <div class="mockup-header">
             <div class="mockup-tabs">
-              <span class="m-tab active">SKILL.MD</span>
-              <span class="m-tab">MIND MAP</span>
-              <span class="m-tab">TEXT VERSION</span>
+              <button type="button" class="m-tab active" id="mockupTabSkill" aria-label="Show Skill Flow example">SKILL FLOW</button>
+              <button type="button" class="m-tab" id="mockupTabProject" aria-label="Show Project Flow example">PROJECT FLOW</button>
             </div>
           </div>
-          <div class="mockup-steps">
-            <div class="m-step">
-              <span class="m-num">01</span>
-              <span class="m-text">Read the uploaded file</span>
-            </div>
-            <div class="m-step">
-              <span class="m-num">02</span>
-              <span class="m-text">Gather the inputs it needs</span>
-            </div>
-            <div class="m-step gap-step" id="mockupGapStep">
-              <span class="m-num">03</span>
-              <span class="m-text" id="mockupGapText">No step covers an empty file</span>
-              <span class="badge-gap" id="mockupGapBadge">GAP</span>
-            </div>
-            <div class="m-step">
-              <span class="m-num">04</span>
-              <span class="m-text">Create the output</span>
-            </div>
-          </div>
-          <div class="mockup-ai-box" id="mockupAiBox">
-            <p class="m-ai-msg"><span class="pink-highlight">AI suggests:</span> add a step for what to do when the file is empty</p>
-            <div class="m-ai-actions">
-              <button type="button" class="btn-m-accept" id="mockupAcceptBtn">Accept</button>
-              <button type="button" class="btn-m-keep" id="mockupKeepBtn">Keep mine</button>
-            </div>
-          </div>
+          <div class="mockup-steps" id="mockupStepsList"></div>
+          <div class="mockup-ai-box" id="mockupAiBox"></div>
         </div>
       </div>
     </div>
 
-    <!-- 2. What justools is -->
+    <!-- 2. The Tools (immediately after hero) -->
+    <section class="landing-section" id="tools">
+      <div class="section-header">
+        <span class="eyebrow-tag">THE TOOLS</span>
+        <h2 class="section-title">Pick one. More on the way.</h2>
+      </div>
+
+      <!-- Featured Tool 1: Skill Flow Mapper -->
+      <div class="tool-banner-card" id="toolCardSkill" role="button" tabindex="0" title="Open Skill Flow Mapper">
+        <div class="tool-banner-main">
+          <span class="badge-avail">AVAILABLE NOW</span>
+          <h3 class="tool-banner-title">Skill Flow Mapper</h3>
+          <p class="tool-banner-desc">
+            Map, question and fix a Claude skill or Markdown playbook. Upload a SKILL.md, any .md file or a zipped skill folder, or paste your text.
+          </p>
+          <button type="button" class="tool-link-btn" id="toolLinkSkill">Open Skill Flow &rarr;</button>
+          <div class="tool-banner-footer">
+            Or try demo: <button type="button" class="demo-link" id="demoPrBtn">PR Review Playbook</button>
+          </div>
+        </div>
+        <div class="tool-banner-tags">
+          <span class="pill-tag">Diagram</span>
+          <span class="pill-tag">Mind map</span>
+          <span class="pill-tag">Suggestions</span>
+          <span class="pill-tag">Outline</span>
+          <span class="pill-tag">Source</span>
+          <span class="pill-tag">Changes</span>
+          <span class="pill-tag">Export PNG</span>
+          <span class="pill-tag">Export SVG</span>
+          <span class="pill-tag">Export Mermaid</span>
+          <span class="pill-tag">Download .md</span>
+        </div>
+      </div>
+
+      <!-- Featured Tool 2: Project Flow Mapper -->
+      <div class="tool-banner-card" id="toolCardProject" role="button" tabindex="0" title="Open Project Flow Mapper" style="margin-top: 24px;">
+        <div class="tool-banner-main">
+          <span class="badge-avail">AVAILABLE NOW</span>
+          <h3 class="tool-banner-title">Project Flow Mapper</h3>
+          <p class="tool-banner-desc">
+            Open an entire software codebase or .zip archive to understand its architecture and runtime paths. Traces routes and calls with animated data flow diagrams.
+          </p>
+          <button type="button" class="tool-link-btn" id="toolLinkProject">Open Project Flow &rarr;</button>
+          <div class="tool-banner-footer">
+            Or try demo: <button type="button" class="demo-link" id="demoOrderBtn">Order &amp; Checkout API (Node.js)</button>
+          </div>
+        </div>
+        <div class="tool-banner-tags">
+          <span class="pill-tag">Architecture DAG</span>
+          <span class="pill-tag">Sequence Diagram</span>
+          <span class="pill-tag">Animated Runner</span>
+          <span class="pill-tag">Route Tracing</span>
+          <span class="pill-tag">Read with Me Voice</span>
+          <span class="pill-tag">File Inspector</span>
+          <span class="pill-tag">Code AST Index</span>
+          <span class="pill-tag">Export Image</span>
+        </div>
+      </div>
+
+      <!-- Future Tools (Coming Next) -->
+      <div class="coming-grid">
+        <div class="coming-card">
+          <span class="badge-coming">COMING NEXT</span>
+          <h4 class="coming-title">[Next tool name]</h4>
+          <p class="coming-desc">[One line on what it helps people check or fix]</p>
+        </div>
+        <div class="coming-card">
+          <span class="badge-coming">COMING NEXT</span>
+          <h4 class="coming-title">[Another tool name]</h4>
+          <p class="coming-desc">[One line on what it helps people check or fix]</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. What justools is -->
     <section class="landing-section" id="what-it-is">
       <div class="section-header">
         <span class="eyebrow-tag">WHAT JUSTOOLS IS</span>
         <h2 class="section-title">AI instructions are hard to see. We make them visible.</h2>
         <p class="section-desc">
-          A skill file or a Markdown playbook is just text, until something goes wrong. Our tools turn that text into something you can look at, challenge and improve.
+          A skill file, a Markdown playbook or even a whole codebase is just text, until something goes wrong. Our tools turn that text into something you can look at, challenge and improve.
         </p>
       </div>
 
@@ -1506,7 +1602,7 @@ html {
           </div>
           <h3 class="feature-title">Map</h3>
           <p class="feature-text">
-            See the workflow of any skill or playbook as a diagram or mind map, with what it creates, what it needs and the rules that apply throughout.
+            See the workflow of any skill, playbook or codebase as a diagram or mind map — with what it creates, what it needs and the rules that apply.
           </p>
         </div>
 
@@ -1516,7 +1612,7 @@ html {
           </div>
           <h3 class="feature-title">Question</h3>
           <p class="feature-text">
-            Ask the AI where the instructions are vague, missing a step or likely to be misread. Chat with it, or read its suggestions on your own.
+            Let AI find where the instructions are vague, missing a step or likely to break. Chat with it, or read its suggestions on your own.
           </p>
         </div>
 
@@ -1526,13 +1622,13 @@ html {
           </div>
           <h3 class="feature-title">Fix</h3>
           <p class="feature-text">
-            Turn a suggestion into an edit, review it in the Changes tab and download the cleaned-up file when you are happy with it.
+            Turn a suggestion into an edit, review it in the Changes tab and download the cleaned-up files when you are happy.
           </p>
         </div>
       </div>
     </section>
 
-    <!-- 3. How humans make AI better -->
+    <!-- 4. How humans make AI better -->
     <section class="landing-section" id="humans-ai">
       <div class="section-header">
         <span class="eyebrow-tag">HOW HUMANS MAKE AI BETTER</span>
@@ -1547,14 +1643,14 @@ html {
         <div class="process-col">
           <div class="process-line"></div>
           <span class="process-num">01</span>
-          <h4 class="process-heading">You write the playbook</h4>
-          <p class="process-text">A SKILL.md, a Markdown guide or any instructions you want an AI to follow.</p>
+          <h4 class="process-heading">You bring the file or project</h4>
+          <p class="process-text">A SKILL.md, a Markdown playbook, a project folder, a .zip or a public GitHub repo.</p>
         </div>
         <div class="process-col">
           <div class="process-line"></div>
           <span class="process-num">02</span>
           <h4 class="process-heading">AI maps and questions it</h4>
-          <p class="process-text">It draws the workflow, then flags gaps, vague rules and missing inputs.</p>
+          <p class="process-text">It draws the workflow or architecture, then flags gaps, vague rules and missing inputs.</p>
         </div>
         <div class="process-col">
           <div class="process-line"></div>
@@ -1594,87 +1690,15 @@ html {
       </div>
     </section>
 
-    <!-- 4. The Tools -->
-    <section class="landing-section" id="tools">
-      <div class="section-header">
-        <span class="eyebrow-tag">THE TOOLS</span>
-        <h2 class="section-title">Start with one. More on the way.</h2>
-      </div>
-
-      <!-- Featured Tool 1: Skill Flow Mapper -->
-      <div class="tool-banner-card">
-        <div class="tool-banner-main">
-          <span class="badge-avail">AVAILABLE NOW</span>
-          <h3 class="tool-banner-title">Skill Flow Mapper</h3>
-          <p class="tool-banner-desc">
-            Map, question and fix a Claude skill or Markdown playbook. Upload a SKILL.md, any .md file or a zipped skill folder, or paste your text.
-          </p>
-          <button type="button" class="tool-link-btn" id="toolLinkSkill">Open the tool &rarr;</button>
-          <div class="tool-banner-footer">
-            Or try demo: <button type="button" class="demo-link" id="demoPrBtn">PR Review Playbook</button>
-          </div>
-        </div>
-        <div class="tool-banner-tags">
-          <span class="pill-tag">Diagram</span>
-          <span class="pill-tag">Mind map</span>
-          <span class="pill-tag">Suggestions</span>
-          <span class="pill-tag">Outline</span>
-          <span class="pill-tag">Source</span>
-          <span class="pill-tag">Changes</span>
-          <span class="pill-tag">Export PNG</span>
-          <span class="pill-tag">Export SVG</span>
-          <span class="pill-tag">Export Mermaid</span>
-          <span class="pill-tag">Download .md</span>
-        </div>
-      </div>
-
-      <!-- Featured Tool 2: Project Flow Mapper -->
-      <div class="tool-banner-card" style="margin-top: 24px;">
-        <div class="tool-banner-main">
-          <span class="badge-avail">AVAILABLE NOW</span>
-          <h3 class="tool-banner-title">Project Flow Mapper</h3>
-          <p class="tool-banner-desc">
-            Open an entire software codebase or .zip archive to understand its architecture and runtime paths. Traces routes and calls with animated data flow diagrams.
-          </p>
-          <button type="button" class="tool-link-btn" id="toolLinkProject">Open the tool &rarr;</button>
-          <div class="tool-banner-footer">
-            Or try demo: <button type="button" class="demo-link" id="demoOrderBtn">Order & Checkout API (Node.js)</button>
-          </div>
-        </div>
-        <div class="tool-banner-tags">
-          <span class="pill-tag">Architecture DAG</span>
-          <span class="pill-tag">Sequence Diagram</span>
-          <span class="pill-tag">Animated Runner</span>
-          <span class="pill-tag">Route Tracing</span>
-          <span class="pill-tag">Read with Me Voice</span>
-          <span class="pill-tag">File Inspector</span>
-          <span class="pill-tag">Code AST Index</span>
-          <span class="pill-tag">Export Image</span>
-        </div>
-      </div>
-
-      <!-- Future Tools (Coming Next) -->
-      <div class="coming-grid">
-        <div class="coming-card">
-          <span class="badge-coming">COMING NEXT</span>
-          <h4 class="coming-title">[Next tool name]</h4>
-          <p class="coming-desc">[One line on what it helps people check or fix]</p>
-        </div>
-        <div class="coming-card">
-          <span class="badge-coming">COMING NEXT</span>
-          <h4 class="coming-title">[Another tool name]</h4>
-          <p class="coming-desc">[One line on what it helps people check or fix]</p>
-        </div>
-      </div>
-
-    </section>
-
     <!-- 5. Bottom Call to Action -->
     <section class="landing-cta-section">
       <h2 class="bottom-cta-title">
         Bring a file you already have. See what it really says.
       </h2>
-      <button type="button" class="btn-pink" id="bottomCtaOpenSkill">Open Skill Flow Mapper &rarr;</button>
+      <div class="hero-cta-group" style="justify-content:center;">
+        <button type="button" class="btn-pink" id="bottomCtaOpenSkill">Open Skill Flow &rarr;</button>
+        <button type="button" class="btn-hero-secondary" id="bottomCtaOpenProject">Open Project Flow &rarr;</button>
+      </div>
     </section>
 
     <!-- 6. Landing Footer -->
@@ -6160,7 +6184,6 @@ function setAppMode(mode, options = {}){
     $("hubScreen").hidden = false;
     $("toolWorkspace").hidden = true;
     if ($("hubNav")) $("hubNav").hidden = false;
-    if ($("navHub").parentElement) $("navHub").parentElement.hidden = true;
     $("gitBtn").hidden = true;
     $("keyBtn").hidden = true;
     $("brandTitle").textContent = "justools";
@@ -6446,14 +6469,34 @@ function initHubAndGit(){
   $("navSkill").onclick = () => navigateTo("skill-flow");
   $("navProject").onclick = () => navigateTo("project-flow");
 
-  if ($("heroLaunchSkill")) $("heroLaunchSkill").onclick = () => navigateTo("skill-flow");
-  if ($("headerOpenToolBtn")) $("headerOpenToolBtn").onclick = () => navigateTo("skill-flow");
+  if ($("heroOpenSkill")) $("heroOpenSkill").onclick = () => navigateTo("skill-flow");
+  if ($("heroOpenProject")) $("heroOpenProject").onclick = () => navigateTo("project-flow");
   if ($("toolLinkSkill")) $("toolLinkSkill").onclick = () => navigateTo("skill-flow");
   if ($("toolLinkProject")) $("toolLinkProject").onclick = () => navigateTo("project-flow");
   if ($("bottomCtaOpenSkill")) $("bottomCtaOpenSkill").onclick = () => navigateTo("skill-flow");
+  if ($("bottomCtaOpenProject")) $("bottomCtaOpenProject").onclick = () => navigateTo("project-flow");
+
+  const bindCard = (cardId, route) => {
+    const card = $(cardId);
+    if (!card) return;
+    card.onclick = (e) => {
+      if (e.target.closest(".demo-link") || e.target.closest(".tool-link-btn")) return;
+      navigateTo(route);
+    };
+    card.onkeydown = (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        if (e.target.closest(".demo-link") || e.target.closest(".tool-link-btn")) return;
+        e.preventDefault();
+        navigateTo(route);
+      }
+    };
+  };
+
+  bindCard("toolCardSkill", "skill-flow");
+  bindCard("toolCardProject", "project-flow");
   
-  if ($("demoPrBtn")) $("demoPrBtn").onclick = () => loadSkillExample("pr-review");
-  if ($("demoOrderBtn")) $("demoOrderBtn").onclick = () => loadProjectExample("order-checkout");
+  if ($("demoPrBtn")) $("demoPrBtn").onclick = (e) => { e.stopPropagation(); loadSkillExample("pr-review"); };
+  if ($("demoOrderBtn")) $("demoOrderBtn").onclick = (e) => { e.stopPropagation(); loadProjectExample("order-checkout"); };
 
   // In-page anchor click interception for smooth transitions
   document.querySelectorAll('a[href^="#"]').forEach(a => {
@@ -6468,37 +6511,107 @@ function initHubAndGit(){
     };
   });
   
-  // Interactive Hero Mockup Card Actions
-  if ($("mockupAcceptBtn")) {
-    $("mockupAcceptBtn").onclick = () => {
-      const gapText = $("mockupGapText");
-      const gapBadge = $("mockupGapBadge");
-      const gapStep = $("mockupGapStep");
-      const aiBox = $("mockupAiBox");
-      if (gapText) gapText.textContent = "Handle empty file condition";
-      if (gapBadge) {
-        gapBadge.textContent = "ADDED";
-        gapBadge.style.background = "var(--make, #3A7419)";
-      }
-      if (gapStep) {
-        gapStep.classList.remove("gap-step");
-        gapStep.style.borderColor = "var(--line)";
-        gapStep.style.background = "var(--surface-2)";
-      }
-      if (aiBox) {
-        aiBox.innerHTML = '<p class="m-ai-msg" style="color:var(--make, #3A7419);font-weight:600;margin:0;">&#10003; Step added to playbook. Review edits in the Changes tab.</p>';
-      }
-    };
+  // Interactive Hero Mockup Card Actions (Dual Skill & Project representation)
+  let currentMockupMode = "skill";
+  function renderHeroMockup(mode = currentMockupMode){
+    currentMockupMode = mode;
+    const tabSkill = $("mockupTabSkill");
+    const tabProj = $("mockupTabProject");
+    const stepsEl = $("mockupStepsList");
+    const aiBox = $("mockupAiBox");
+    if (!stepsEl || !aiBox) return;
+
+    if (tabSkill) tabSkill.classList.toggle("active", mode === "skill");
+    if (tabProj) tabProj.classList.toggle("active", mode === "project");
+
+    if (mode === "skill"){
+      stepsEl.innerHTML = `
+        <div class="m-step">
+          <span class="m-num">01</span>
+          <span class="m-text">Read PR diff &amp; commit messages</span>
+        </div>
+        <div class="m-step">
+          <span class="m-num">02</span>
+          <span class="m-text">Run test suite and linter checks</span>
+        </div>
+        <div class="m-step gap-step" id="mockupGapStep">
+          <span class="m-num">03</span>
+          <span class="m-text" id="mockupGapText">CI failure has no retry or notification rule</span>
+          <span class="badge-gap" id="mockupGapBadge">GAP</span>
+        </div>
+        <div class="m-step">
+          <span class="m-num">04</span>
+          <span class="m-text">Post review summary &amp; approve PR</span>
+        </div>
+      `;
+      aiBox.innerHTML = `
+        <p class="m-ai-msg"><span class="pink-highlight">AI suggests:</span> add retry rule and Slack alert if CI check fails</p>
+        <div class="m-ai-actions">
+          <button type="button" class="btn-m-accept" id="mockupAcceptBtn">Accept</button>
+          <button type="button" class="btn-m-keep" id="mockupKeepBtn">Keep mine</button>
+        </div>
+      `;
+    } else {
+      stepsEl.innerHTML = `
+        <div class="m-step">
+          <span class="m-num">01</span>
+          <span class="m-text">POST /api/orders (Express Route)</span>
+        </div>
+        <div class="m-step">
+          <span class="m-num">02</span>
+          <span class="m-text">authMiddleware &amp; validateOrderPayload</span>
+        </div>
+        <div class="m-step gap-step" id="mockupGapStep">
+          <span class="m-num">03</span>
+          <span class="m-text" id="mockupGapText">Unhandled Stripe 504 Gateway Timeout</span>
+          <span class="badge-gap" id="mockupGapBadge">GAP</span>
+        </div>
+        <div class="m-step">
+          <span class="m-num">04</span>
+          <span class="m-text">db.orders.insert() &amp; sendReceiptEmail()</span>
+        </div>
+      `;
+      aiBox.innerHTML = `
+        <p class="m-ai-msg"><span class="pink-highlight">AI suggests:</span> wrap stripeClient.charge() with retry + idempotency key</p>
+        <div class="m-ai-actions">
+          <button type="button" class="btn-m-accept" id="mockupAcceptBtn">Accept</button>
+          <button type="button" class="btn-m-keep" id="mockupKeepBtn">Keep mine</button>
+        </div>
+      `;
+    }
+
+    const acceptBtn = $("mockupAcceptBtn");
+    const keepBtn = $("mockupKeepBtn");
+    const gapText = $("mockupGapText");
+    const gapBadge = $("mockupGapBadge");
+    const gapStep = $("mockupGapStep");
+
+    if (acceptBtn){
+      acceptBtn.onclick = () => {
+        if (gapText) gapText.textContent = mode === "skill" ? "Retry CI pipeline & alert on failure" : "Catch Stripe timeout with idempotent retry";
+        if (gapBadge){
+          gapBadge.textContent = "ADDED";
+          gapBadge.style.background = "var(--make, #3A7419)";
+        }
+        if (gapStep){
+          gapStep.classList.remove("gap-step");
+          gapStep.style.borderColor = "var(--line)";
+          gapStep.style.background = "var(--surface-2)";
+        }
+        aiBox.innerHTML = `<p class="m-ai-msg" style="color:var(--make, #3A7419);font-weight:600;margin:0;">&#10003; ${mode === "skill" ? "Step added to playbook. Review edits in Changes tab." : "Error handler inserted in route. Review edits in Changes tab."}</p>`;
+      };
+    }
+
+    if (keepBtn){
+      keepBtn.onclick = () => {
+        aiBox.innerHTML = '<p class="m-ai-msg" style="color:var(--muted);margin:0;">Suggestion kept as note. You keep final say over every change.</p>';
+      };
+    }
   }
 
-  if ($("mockupKeepBtn")) {
-    $("mockupKeepBtn").onclick = () => {
-      const aiBox = $("mockupAiBox");
-      if (aiBox) {
-        aiBox.innerHTML = '<p class="m-ai-msg" style="color:var(--muted);margin:0;">Suggestion kept as note. You keep final say over every change.</p>';
-      }
-    };
-  }
+  if ($("mockupTabSkill")) $("mockupTabSkill").onclick = () => renderHeroMockup("skill");
+  if ($("mockupTabProject")) $("mockupTabProject").onclick = () => renderHeroMockup("project");
+  renderHeroMockup("skill");
 
   $("skillExampleSel").onchange = e => loadSkillExample(e.target.value);
   $("projExampleSel").onchange = e => loadProjectExample(e.target.value);
