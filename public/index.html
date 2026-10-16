@@ -1416,11 +1416,11 @@ html {
       </button>
     </nav>
     
-    <button class="btn" id="gitBtn" type="button" title="Import from a public GitHub repository or file">
+    <button class="btn" id="gitBtn" type="button" title="Import from a public GitHub repository or file" hidden>
       <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
       <span>GitHub Repo</span>
     </button>
-    <button class="btn keybtn" id="keyBtn" type="button" title="AI provider, API key and model"><span class="kdot"></span><span id="keyLabel">Add API key</span></button>
+    <button class="btn keybtn" id="keyBtn" type="button" title="AI provider, API key and model" hidden><span class="kdot"></span><span id="keyLabel">Add API key</span></button>
     <button class="btn" id="undoBtn" type="button" disabled title="Undo the last change to the file">Undo</button>
     <button class="btn primary" id="dlBtn" type="button"><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v9M4 7l4 4 4-4M2 14h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="dlLabel">Download .md</span><span class="dotmark" id="dirtyDot" hidden></span></button>
     <button class="btn" id="dlZipBtn" type="button" hidden>Download .zip</button>
@@ -1666,29 +1666,6 @@ html {
         </div>
       </div>
 
-      <!-- Quick Git Bar on Hub -->
-      <div class="hub-git-bar" style="margin-top: 32px;">
-        <div class="hub-git-bar-header">
-          <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-          <div>
-            <h3>Import from a Public GitHub Repository</h3>
-            <p>Paste any public GitHub repository link or file URL to load and map it directly in your browser.</p>
-          </div>
-        </div>
-        <form class="hub-git-input-group" id="hubGitForm" onsubmit="return false;">
-          <input type="text" id="hubGitUrl" placeholder="https://github.com/owner/repo or owner/repo" spellcheck="false" autocomplete="off" />
-          <select id="hubGitTool">
-            <option value="skill-flow">Skill Flow Mapper</option>
-            <option value="project-flow">Project Flow Mapper</option>
-          </select>
-          <button class="btn primary" type="submit" id="hubGitGo">Inspect Repository</button>
-        </form>
-        <div class="hub-git-samples">
-          <span>Try sample repos:</span>
-          <button type="button" class="hub-git-pill" data-gh="octocat/Hello-World" data-gh-tool="project-flow">octocat/Hello-World</button>
-          <button type="button" class="hub-git-pill" data-gh="expressjs/express" data-gh-tool="project-flow">expressjs/express</button>
-        </div>
-      </div>
     </section>
 
     <!-- 5. Bottom Call to Action -->
@@ -6040,6 +6017,8 @@ function setAppMode(mode, options = {}){
     $("toolWorkspace").hidden = true;
     if ($("hubNav")) $("hubNav").hidden = false;
     if ($("navHub").parentElement) $("navHub").parentElement.hidden = true;
+    $("gitBtn").hidden = true;
+    $("keyBtn").hidden = true;
     $("brandTitle").textContent = "justools";
     $("brandDesc").textContent = "AI drafts. Humans decide.";
     $("dlBtn").hidden = true;
@@ -6050,6 +6029,8 @@ function setAppMode(mode, options = {}){
     $("toolWorkspace").hidden = false;
     if ($("hubNav")) $("hubNav").hidden = true;
     if ($("navHub").parentElement) $("navHub").parentElement.hidden = false;
+    $("gitBtn").hidden = false;
+    $("keyBtn").hidden = false;
     $("brandTitle").textContent = "Skill Flow Mapper";
     $("brandDesc").textContent = "Map, question and fix a Claude skill or Markdown playbook.";
     
@@ -6080,6 +6061,8 @@ function setAppMode(mode, options = {}){
     $("toolWorkspace").hidden = false;
     if ($("hubNav")) $("hubNav").hidden = true;
     if ($("navHub").parentElement) $("navHub").parentElement.hidden = false;
+    $("gitBtn").hidden = false;
+    $("keyBtn").hidden = false;
     $("brandTitle").textContent = "Project Flow Mapper";
     $("brandDesc").textContent = "Open a whole project folder: see its architecture, structure and how it runs, then question and fix it.";
     
