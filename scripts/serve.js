@@ -14,6 +14,8 @@ const TYPES = {
   ".svg": "image/svg+xml",
   ".md": "text/markdown; charset=utf-8",
   ".json": "application/json",
+  ".txt": "text/plain; charset=utf-8",
+  ".xml": "application/xml; charset=utf-8",
 };
 
 createServer(async (req, res) => {
@@ -32,6 +34,17 @@ createServer(async (req, res) => {
     });
     res.end(body);
   } catch {
+    if (!extname(path)) {
+      try {
+        const body = await readFile(join(ROOT, "index.html"));
+        res.writeHead(200, {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-store",
+        });
+        res.end(body);
+        return;
+      } catch {}
+    }
     res.writeHead(404).end("Not found");
   }
 }).listen(PORT, () => console.log(`Skill Flow Mapper at http://localhost:${PORT}`));

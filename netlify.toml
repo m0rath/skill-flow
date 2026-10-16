@@ -2,3 +2,43 @@
 [build]
   publish = "public"
   command = ""
+
+[[redirects]]
+  from = "/skill-flow-mapper"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/skill-flow-mapper/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/project-flow-mapper"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/project-flow-mapper/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/skill-flow"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/skill-flow/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/project-flow"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/project-flow/*"
+  to = "/index.html"
+  status = 200
