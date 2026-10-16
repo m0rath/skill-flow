@@ -151,7 +151,7 @@ button{cursor:pointer}
 .ib:hover{border-color:var(--wire)}
 .ib[aria-pressed="true"]{border-color:var(--step);color:var(--step);background:var(--step-bg)}
 .zval{font:500 12px var(--mono);width:44px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums}
-select.jump{height:28px;border:1px solid var(--line);border-radius:6px;background:var(--surface);max-width:230px;font-size:12.5px;padding:0 6px}
+select.jump{height:28px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);max-width:280px;font-size:12.5px;padding:0 6px}
 .hintline{color:var(--faint);font-size:12px}
 
 .viewport{position:relative;overflow:hidden;height:clamp(460px,calc(100vh - 230px),1400px);touch-action:none;cursor:grab;
@@ -1580,7 +1580,7 @@ html {
           </p>
           <button type="button" class="tool-link-btn" id="toolLinkProject">Open Project Flow &rarr;</button>
           <div class="tool-banner-footer">
-            Or try demo: <button type="button" class="demo-link" id="demoOrderBtn">Order &amp; Checkout API (Node.js)</button>
+            Or try demo: <button type="button" class="demo-link" id="demoOrderBtn">Order &amp; Checkout API</button> · <button type="button" class="demo-link" id="demoExpressBtn">Express (GitHub)</button>
           </div>
         </div>
         <div class="tool-banner-tags">
@@ -1744,10 +1744,12 @@ html {
       <button class="btn" id="pasteBtn" type="button" hidden>Paste text</button>
       <button class="btn" id="gitBtnDrop" type="button"><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub Repo</button>
       
-      <span id="skillExampleWrap" class="toggle" style="color:var(--ink);gap:6px" hidden>Sample skill:
+      <span id="skillExampleWrap" class="toggle" style="color:var(--ink);gap:6px" hidden>
+        <span id="skillExampleLabel">Sample skill:</span>
         <select id="skillExampleSel" class="jump"><option value="pr-review">PR Review Playbook</option></select>
       </span>
-      <span id="projExampleWrap" class="toggle" style="color:var(--ink);gap:6px">Sample project:
+      <span id="projExampleWrap" class="toggle" style="color:var(--ink);gap:6px">
+        <span id="projExampleLabel">Sample project:</span>
         <select id="projExampleSel" class="jump"><option value="order-checkout">Order & Checkout API (Node.js)</option></select>
       </span>
 
@@ -3128,6 +3130,8 @@ async function load(files){
   if (!files.filter(f => !f.virtual).length){ showErr("That file is empty or not text. Upload a .md, .txt, or a zipped skill folder."); return; }
   files.sort((a, b) => (!!a.virtual - !!b.virtual) || (/(^|\/)skill\.md$/i.test(b.path) - /(^|\/)skill\.md$/i.test(a.path)));
   resetForNewFile();
+  S.isExample = false;
+  S.exampleId = null;
   S.files = files; S.activeFile = 0; S.rawModel = null;
   S.original = files.filter(f => !f.virtual).map(f => ({path:f.path, text:f.text}));
   S.model = normalize(quickParse(files)); S.mode = "quick";
@@ -4456,7 +4460,61 @@ window.addEventListener("pagehide", () => stopAudio());
 rcUi();
 
 /* ================= render all / persistence ================= */
+function syncSampleSelectors(){
+  const isSkill = (typeof isSkillWorkspace === "function" && isSkillWorkspace(S)) || appMode === "skill-flow";
+
+  if (isSkill){
+    const sel = $("skillExampleSel");
+    const lbl = $("skillExampleLabel");
+    if (!sel) return;
+
+    const isPr = (S.isExample && S.exampleId === "pr-review") || S.projectName === "pr-review";
+    if (lbl) lbl.textContent = isPr ? "Sample skill:" : "Active skill:";
+
+    let h = "";
+    if (isPr){
+      h += `<option value="pr-review" selected>PR Review Playbook</option>`;
+    } else {
+      const fileName = S.files && S.files[0] ? (S.files[0].path || S.projectName || "Custom Playbook") : (S.projectName || "Custom Playbook");
+      h += `<option value="__current__" selected>📄 ${esc(fileName)} (Active)</option>`;
+      h += `<optgroup label="Sample Skills">`;
+      h += `<option value="pr-review">PR Review Playbook</option>`;
+      h += `</optgroup>`;
+    }
+    sel.innerHTML = h;
+  } else {
+    const sel = $("projExampleSel");
+    const lbl = $("projExampleLabel");
+    if (!sel) return;
+
+    const projName = String(S.projectName || "").toLowerCase();
+    const title = String(S.model?.title || "").toLowerCase();
+    const isOrder = (S.isExample && S.exampleId === "order-checkout") || projName === "order-checkout-api" || projName === "order-checkout" || title === "order & checkout api";
+    const isExpress = projName === "express" || projName === "expressjs/express" || S.exampleId === "express" || title === "express";
+
+    if (lbl) lbl.textContent = (isOrder || isExpress) ? "Sample project:" : "Active project:";
+
+    let h = "";
+    if (isOrder){
+      h += `<option value="order-checkout" selected>Order & Checkout API (Node.js)</option>`;
+      h += `<option value="express">Express (Node.js framework sample)</option>`;
+    } else if (isExpress){
+      h += `<option value="express" selected>Express (GitHub: expressjs/express)</option>`;
+      h += `<option value="order-checkout">Order & Checkout API (Node.js sample)</option>`;
+    } else {
+      const dispName = S.projectName || "Custom Project";
+      h += `<option value="__current__" selected>📂 ${esc(dispName)} (Active)</option>`;
+      h += `<optgroup label="Sample Projects">`;
+      h += `<option value="order-checkout">Order & Checkout API (Node.js sample)</option>`;
+      h += `<option value="express">Express (Node.js framework sample)</option>`;
+      h += `</optgroup>`;
+    }
+    sel.innerHTML = h;
+  }
+}
+
 function renderAll(){
+  syncSampleSelectors();
   renderSummary(); renderDiagram(); renderOutline(); renderSideStatic(); renderDetail(); updateDl(); renderScope();
   if (S.tab === "mindmap") renderMindmap();
   if (S.tab === "source") renderSource();
@@ -4851,7 +4909,7 @@ function resetForNewFile(){ S.sel = null; S.chatScope = null; S.highlight = null
 async function load(r){
   showErr("");
   if (!r || !r.files || !r.files.length){ showErr("No readable text files were found. Open the project's root folder, or upload a .zip of it."); setStatus("quick", "Nothing loaded"); return; }
-  resetForNewFile(); S.isExample = false;
+  resetForNewFile(); S.isExample = false; S.exampleId = null;
   S.files = r.files; S.bins = r.bins || []; S.projectName = r.root || (S.files.find(f => f.path === "package.json") ? (() => { try { return JSON.parse(S.files.find(f => f.path === "package.json").text).name; } catch(e){ return null; } })() : null) || "Project";
   S.activeFile = Math.max(0, S.files.findIndex(f => (isReadme(f.path) || /(^|\/)skill\.md$/i.test(f.path)) && !f.path.includes("/")));
   if (S.activeFile < 0) S.activeFile = 0;
@@ -6302,7 +6360,8 @@ function captureWorkspace(){
     flowIdx: S.flowIdx,
     flowStep: S.flowStep,
     flowMode: S.flowMode,
-    isExample: S.isExample
+    isExample: S.isExample,
+    exampleId: S.exampleId || (String(S.projectName).toLowerCase() === "express" ? "express" : String(S.projectName).toLowerCase() === "order-checkout-api" ? "order-checkout" : null)
   };
 }
 
@@ -6335,6 +6394,7 @@ function restoreWorkspace(snap){
 function initSkillWorkspace(){
   resetForNewFile();
   S.isExample = true;
+  S.exampleId = "pr-review";
   S.files = [{ path: "SKILL.md", text: EXAMPLE_MD, size: EXAMPLE_MD.length }];
   S.bins = [];
   S.projectName = "pr-review";
@@ -6352,6 +6412,7 @@ function initSkillWorkspace(){
 function initProjectWorkspace(){
   resetForNewFile();
   S.isExample = true;
+  S.exampleId = "order-checkout";
   S.files = EXAMPLE_PROJECT.map(f => ({ path: f.path, text: f.text, size: f.text.length }));
   S.bins = [];
   S.projectName = "order-checkout-api";
@@ -6367,6 +6428,11 @@ function initProjectWorkspace(){
 }
 
 function parseAppRoute(){
+  const raw = (location.hash || "").replace(/^#\/?/, "").toLowerCase();
+  if (raw === "skill-flow-mapper" || raw === "skill-flow" || raw === "skill") return { mode: "skill-flow", section: null };
+  if (raw === "project-flow-mapper" || raw === "project-flow" || raw === "project") return { mode: "project-flow", section: null };
+  if (raw === "what-it-is" || raw === "humans-ai" || raw === "tools") return { mode: "hub", section: raw };
+
   const path = (location.pathname || "/").toLowerCase().replace(/\/+$/, "") || "/";
   const pathSegments = path.split("/").filter(Boolean);
   const firstSeg = pathSegments[0] || "";
@@ -6377,11 +6443,6 @@ function parseAppRoute(){
   if (firstSeg === "project-flow-mapper" || firstSeg === "project-flow" || firstSeg === "project") {
     return { mode: "project-flow", section: null };
   }
-
-  const raw = (location.hash || "").replace(/^#\/?/, "").toLowerCase();
-  if (raw === "skill-flow-mapper" || raw === "skill-flow" || raw === "skill") return { mode: "skill-flow", section: null };
-  if (raw === "project-flow-mapper" || raw === "project-flow" || raw === "project") return { mode: "project-flow", section: null };
-  if (raw === "what-it-is" || raw === "humans-ai" || raw === "tools") return { mode: "hub", section: raw };
   return { mode: "hub", section: null };
 }
 const parseHashRoute = parseAppRoute;
@@ -6555,9 +6616,12 @@ window.addEventListener("hashchange", handleRoute);
 window.addEventListener("popstate", handleRoute);
 
 // --- Sample Selection Functions ---
+let expressWorkspaceCache = null;
+
 function loadSkillExample(which){
   resetForNewFile();
   S.isExample = true;
+  S.exampleId = "pr-review";
   S.files = [{ path: "SKILL.md", text: EXAMPLE_MD, size: EXAMPLE_MD.length }];
   S.bins = [];
   S.projectName = "pr-review";
@@ -6570,12 +6634,47 @@ function loadSkillExample(which){
   S.tab = "diagram";
   setStatus("example", "Example skill · PR Review Playbook");
   skillWorkspaceSnapshot = captureWorkspace();
+  if (typeof syncSampleSelectors === "function") syncSampleSelectors();
+  renderAll();
   navigateTo("skill-flow");
 }
 
-function loadProjectExample(which){
+async function loadProjectExample(which){
+  if (which === "express"){
+    if (expressWorkspaceCache){
+      resetForNewFile();
+      restoreWorkspace(expressWorkspaceCache);
+      S.isExample = true;
+      S.exampleId = "express";
+      setStatus("example", "Example project · Express framework");
+      projectWorkspaceSnapshot = captureWorkspace();
+      if (typeof syncSampleSelectors === "function") syncSampleSelectors();
+      renderAll();
+      navigateTo("project-flow");
+      return;
+    }
+    try {
+      showAiBanner("Loading Express repository…", "Fetching files from github.com/expressjs/express");
+      await importFromGitHub("https://github.com/expressjs/express", "project-flow");
+      S.isExample = true;
+      S.exampleId = "express";
+      setStatus("example", "Example project · Express framework");
+      expressWorkspaceCache = captureWorkspace();
+      projectWorkspaceSnapshot = captureWorkspace();
+      if (typeof syncSampleSelectors === "function") syncSampleSelectors();
+      renderAll();
+    } catch(err){
+      showErr(err.message || "Failed to load Express sample from GitHub.");
+      if (typeof syncSampleSelectors === "function") syncSampleSelectors();
+    } finally {
+      hideAiBanner();
+    }
+    return;
+  }
+
   resetForNewFile();
   S.isExample = true;
+  S.exampleId = "order-checkout";
   S.files = EXAMPLE_PROJECT.map(f => ({path:f.path, text:f.text, size:f.text.length}));
   S.bins = [];
   S.projectName = "order-checkout-api";
@@ -6588,6 +6687,8 @@ function loadProjectExample(which){
   S.tab = S.flows && S.flows.length ? "flows" : "overview";
   setStatus("example", "Example project · open your own folder");
   projectWorkspaceSnapshot = captureWorkspace();
+  if (typeof syncSampleSelectors === "function") syncSampleSelectors();
+  renderAll();
   navigateTo("project-flow");
 }
 
@@ -6696,6 +6797,13 @@ async function importFromGitHub(rawUrl, targetTool = "project-flow"){
   const result = await ingest(entries);
   result.root = target.repo;
   load(result);
+  if (target.fullName.toLowerCase() === "expressjs/express" || target.repo.toLowerCase() === "express"){
+    S.isExample = true;
+    S.exampleId = "express";
+    expressWorkspaceCache = captureWorkspace();
+    projectWorkspaceSnapshot = captureWorkspace();
+  }
+  if (typeof syncSampleSelectors === "function") syncSampleSelectors();
   navigateTo("project-flow");
 }
 
@@ -6758,6 +6866,7 @@ function initHubAndGit(){
   
   if ($("demoPrBtn")) $("demoPrBtn").onclick = (e) => { e.stopPropagation(); loadSkillExample("pr-review"); };
   if ($("demoOrderBtn")) $("demoOrderBtn").onclick = (e) => { e.stopPropagation(); loadProjectExample("order-checkout"); };
+  if ($("demoExpressBtn")) $("demoExpressBtn").onclick = (e) => { e.stopPropagation(); loadProjectExample("express"); };
 
   // In-page anchor click interception for smooth transitions
   document.querySelectorAll('a[href^="#"]').forEach(a => {
@@ -6945,11 +7054,19 @@ function initHubAndGit(){
       S.chat = (d.chat || []).map(m => ({...m, status:m.status === "applied-old" ? "applied" : m.status, snap:-1}));
       S.changes = d.changes || []; S.notes = d.notes || []; S.customFlows = d.customFlows || []; S.aiEntries = d.aiEntries || []; if (S.customFlows.length || S.aiEntries.length){ try { S.flows = findFlows(); } catch(e){} } S.links = d.links || []; S.mmPos = d.mmPos || {}; S.sugg = d.sugg || {claude:null, stale:false, dismissed:[]};
       setStatus(S.mode === "claude" ? "claude" : "quick", (S.mode === "claude" ? "Mapped by AI" : "Quick map") + " · last project");
+      if (String(S.projectName).toLowerCase() === "express" || S.model?.title?.toLowerCase() === "express"){
+        S.isExample = true;
+        S.exampleId = "express";
+        expressWorkspaceCache = captureWorkspace();
+      } else if (String(S.projectName).toLowerCase() === "order-checkout-api" || S.model?.title?.toLowerCase() === "order & checkout api"){
+        S.isExample = true;
+        S.exampleId = "order-checkout";
+      }
       restored = true;
     }
   } catch(e){ restored = false; }
   if (!restored){
-    S.isExample = true; S.files = EXAMPLE_PROJECT.map(f => ({path:f.path, text:f.text, size:f.text.length})); S.bins = []; S.projectName = "order-checkout-api";
+    S.isExample = true; S.exampleId = "order-checkout"; S.files = EXAMPLE_PROJECT.map(f => ({path:f.path, text:f.text, size:f.text.length})); S.bins = []; S.projectName = "order-checkout-api";
     S.activeFile = Math.max(0, S.files.findIndex(f => f.path === "README.md")); S.original = S.files.map(f => ({path:f.path, text:f.text}));
     analyzeProject(); S.rawModel = EXAMPLE_PROJECT_MODEL; S.model = normalize(EXAMPLE_PROJECT_MODEL); S.mode = "quick";
     setStatus("example", "Example project · open your own folder");
@@ -6960,7 +7077,7 @@ function initHubAndGit(){
     skillWorkspaceSnapshot = captureWorkspace();
     const projFiles = EXAMPLE_PROJECT.map(f => ({path:f.path, text:f.text, size:f.text.length}));
     projectWorkspaceSnapshot = {
-      files: projFiles, bins: [], projectName: "order-checkout-api",
+      files: projFiles, bins: [], projectName: "order-checkout-api", exampleId: "order-checkout",
       activeFile: Math.max(0, projFiles.findIndex(f => f.path === "README.md")), original: projFiles.map(f => ({path:f.path, text:f.text})),
       rawModel: EXAMPLE_PROJECT_MODEL, model: normalize(EXAMPLE_PROJECT_MODEL), mode: "quick",
       tab: "flows", isExample: true, collapsed: new Set(), treeOpen: new Set(),
@@ -6971,7 +7088,7 @@ function initHubAndGit(){
     const skillFiles = [{ path: "SKILL.md", text: EXAMPLE_MD, size: EXAMPLE_MD.length }];
     const skillModel = normalize(quickParse(skillFiles));
     skillWorkspaceSnapshot = {
-      files: skillFiles, bins: [], projectName: "pr-review", activeFile: 0,
+      files: skillFiles, bins: [], projectName: "pr-review", exampleId: "pr-review", activeFile: 0,
       original: skillFiles.map(f => ({path:f.path, text:f.text})), rawModel: null, model: skillModel, mode: "quick",
       tab: "diagram", isExample: true, collapsed: new Set(), treeOpen: new Set(),
       sugg: {claude:null, stale:false, dismissed:[]}, changes: [], notes: [], chat: [], links: [], mmPos: {}, fitted: {}
@@ -6982,7 +7099,7 @@ function initHubAndGit(){
   loadSettings(); applyKeyState();
   renderChat(); setSide("details");
   initHubAndGit();
-  window.__SF = { S, applyMsg, allSugg, suggCount, renderSuggest, renderSummary, renderDiagram };
+  window.__SF = { S, applyMsg, allSugg, suggCount, renderSuggest, renderSummary, renderDiagram, renderAll, loadProjectExample, loadSkillExample, syncSampleSelectors };
   handleRoute();
 })();
 })();
