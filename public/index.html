@@ -963,6 +963,7 @@ html {
 .landing-section {
   padding: 80px 0;
   border-top: 1px solid var(--line);
+  scroll-margin-top: 24px;
 }
 .section-header {
   margin-bottom: 44px;
@@ -4407,15 +4408,16 @@ function compsFromLocal(P){
 }
 function quickParse(files){
   const P = S.project || analyzeProject();
-  const readme = files.find(f => isReadme(f.path) && !f.path.includes("/")) || files.find(f => isReadme(f.path));
+  const skillFile = files.find(f => /(^|\/)skill\.md$/i.test(f.path) || f.path.endsWith(".skill"));
+  const readme = skillFile || files.find(f => isReadme(f.path) && !f.path.includes("/")) || files.find(f => isReadme(f.path)) || files.find(f => f.path.endsWith(".md"));
   let flow = {steps:[]};
   if (readme){ try { flow = quickParseFlow([readme]); } catch(e){} }
   const steps = (flow.steps || []).filter(s => s.title !== "No clear steps found");
   const firstPara = readme ? (readme.text.replace(/^---[\s\S]*?\n---/, "").split(/\n\s*\n/).map(x => x.trim()).find(x => x && !x.startsWith("#") && !x.startsWith("!") && !x.startsWith("[")) || "") : "";
-  return { title:(readme && (readme.text.match(/^#\s+(.+)$/m) || [])[1]) || P.name, summary:firstPara.replace(/\s+/g, " ").slice(0, 300), trigger:"",
+  return { title:(readme && (readme.text.match(/^#\s+(.+)$/m) || [])[1]) || flow.title || P.name, summary:flow.summary || firstPara.replace(/\s+/g, " ").slice(0, 300), trigger:flow.trigger || "",
     stack:P.stack, inputs:flow.inputs || [], notes:flow.notes || [], commands:P.commands,
     components:compsFromLocal(P),
-    steps:steps.length ? steps : [{kind:"step", title:"No run instructions found", detail:"The README doesn't describe how to install or run the project. Map with AI to infer the flow from the code."}] };
+    steps:steps.length ? steps : (flow.steps && flow.steps.length ? flow.steps : [{kind:"step", title:"No run instructions found", detail:"The README doesn't describe how to install or run the project. Map with AI to infer the flow from the code."}]) };
 }
 const PSEUDO = new Map();
 function getNode(id){ if (!id) return null; return index.get(id) || PSEUDO.get(id) || (String(id).startsWith("f:") ? fileNode(String(id).slice(2)) : null); }
@@ -4541,12 +4543,20 @@ async function load(r){
   if (!r || !r.files || !r.files.length){ showErr("No readable text files were found. Open the project's root folder, or upload a .zip of it."); setStatus("quick", "Nothing loaded"); return; }
   resetForNewFile(); S.isExample = false;
   S.files = r.files; S.bins = r.bins || []; S.projectName = r.root || (S.files.find(f => f.path === "package.json") ? (() => { try { return JSON.parse(S.files.find(f => f.path === "package.json").text).name; } catch(e){ return null; } })() : null) || "Project";
-  S.activeFile = Math.max(0, S.files.findIndex(f => isReadme(f.path) && !f.path.includes("/")));
+  S.activeFile = Math.max(0, S.files.findIndex(f => (isReadme(f.path) || /(^|\/)skill\.md$/i.test(f.path)) && !f.path.includes("/")));
+  if (S.activeFile < 0) S.activeFile = 0;
   S.rawModel = null; S.original = S.files.map(f => ({path:f.path, text:f.text}));
   analyzeProject();
   S.model = normalize(quickParse(S.files)); S.mode = "quick";
   setStatus("quick", `Quick map · ${S.files.length} text files${S.bins.length ? `, ${S.bins.length} other` : ""}${r.skipped ? ` · ${r.skipped} skipped (size limit)` : ""}`);
-  renderAll(); setTab(S.flows && S.flows.length ? "flows" : "overview"); save();
+  if (typeof isSkillWorkspace === "function" && (appMode === "skill-flow" || isSkillWorkspace(S))){
+    setTab("diagram");
+    if (typeof captureWorkspace === "function") skillWorkspaceSnapshot = captureWorkspace();
+  } else {
+    setTab(S.flows && S.flows.length ? "flows" : "overview");
+    if (typeof captureWorkspace === "function") projectWorkspaceSnapshot = captureWorkspace();
+  }
+  renderAll(); save();
   if (sampleFn && $("aiToggle").checked) analyze();
 }
 function afterFileChange(why){
@@ -5997,21 +6007,155 @@ $("fSpeed") && ($("fSpeed").onchange = () => {});
 
 // --- App Mode & Routing ---
 let appMode = "hub";
+let skillWorkspaceSnapshot = null;
+let projectWorkspaceSnapshot = null;
+
+function isSkillWorkspace(s){
+  if (!s || !s.files || !s.files.length) return false;
+  if (s.projectName === "pr-review") return true;
+  if (s.projectName === "order-checkout-api") return false;
+  if (s.files.some(f => f.path === "package.json" || f.path === "server.js" || f.path.startsWith("src/"))) return false;
+  return s.files.some(f => /(^|\/)skill\.md$/i.test(f.path) || f.path.endsWith(".skill")) ||
+         (s.files.length === 1 && s.files[0].path.endsWith(".md"));
+}
+
+function captureWorkspace(){
+  return {
+    files: S.files.map(f => ({ ...f })),
+    activeFile: S.activeFile,
+    rawModel: S.rawModel,
+    model: S.model,
+    mode: S.mode,
+    sel: S.sel,
+    collapsed: new Set(S.collapsed),
+    tab: S.tab,
+    bins: [...(S.bins || [])],
+    projectName: S.projectName,
+    treeOpen: new Set(S.treeOpen),
+    side: S.side,
+    highlight: S.highlight,
+    history: [...S.history],
+    dirty: S.dirty,
+    chat: [...S.chat],
+    chatScope: S.chatScope,
+    links: [...S.links],
+    mmPos: { ...S.mmPos },
+    mmOpts: { ...S.mmOpts },
+    mmLink: S.mmLink,
+    sugg: { ...S.sugg },
+    editing: S.editing,
+    changes: [...S.changes],
+    notes: [...S.notes],
+    original: S.original ? S.original.map(f => ({ ...f })) : null,
+    chgView: S.chgView,
+    fitted: { ...S.fitted },
+    flows: S.flows,
+    project: S.project,
+    customFlows: S.customFlows || [],
+    aiEntries: S.aiEntries || [],
+    archLevel: S.archLevel,
+    flowIdx: S.flowIdx,
+    flowStep: S.flowStep,
+    flowMode: S.flowMode,
+    isExample: S.isExample
+  };
+}
+
+function restoreWorkspace(snap){
+  if (!snap) return;
+  Object.assign(S, snap);
+  if (S.model && S.model.steps){
+    index.clear();
+    numIndex.clear();
+    let seq = 0;
+    function walk(nodes, prefix, parent){
+      let n = 0;
+      return arr(nodes).filter(x => x && typeof x === "object").map(raw => {
+        n++;
+        const num = raw.num || (prefix ? `${prefix}.${n}` : String(n));
+        raw.id = raw.id || ("n" + (++seq));
+        raw.parent = parent;
+        index.set(raw.id, raw);
+        numIndex.set(num, raw.id);
+        if (raw.branches) raw.branches.forEach((b, i) => walk(b.steps, num + String.fromCharCode(97 + i), raw.id));
+        if (raw.steps) walk(raw.steps, num, raw.id);
+        return raw;
+      });
+    }
+    walk(S.model.steps, "", null);
+  }
+}
+
+function initSkillWorkspace(){
+  resetForNewFile();
+  S.isExample = true;
+  S.files = [{ path: "SKILL.md", text: EXAMPLE_MD, size: EXAMPLE_MD.length }];
+  S.bins = [];
+  S.projectName = "pr-review";
+  S.activeFile = 0;
+  S.original = S.files.map(f => ({ path: f.path, text: f.text }));
+  S.rawModel = null;
+  analyzeProject();
+  S.model = normalize(quickParse(S.files));
+  S.mode = "quick";
+  S.tab = "diagram";
+  setStatus("example", "Example skill · PR Review Playbook");
+  skillWorkspaceSnapshot = captureWorkspace();
+}
+
+function initProjectWorkspace(){
+  resetForNewFile();
+  S.isExample = true;
+  S.files = EXAMPLE_PROJECT.map(f => ({ path: f.path, text: f.text, size: f.text.length }));
+  S.bins = [];
+  S.projectName = "order-checkout-api";
+  S.activeFile = Math.max(0, S.files.findIndex(f => f.path === "README.md"));
+  S.original = S.files.map(f => ({ path: f.path, text: f.text }));
+  analyzeProject();
+  S.rawModel = EXAMPLE_PROJECT_MODEL;
+  S.model = normalize(EXAMPLE_PROJECT_MODEL);
+  S.mode = "claude";
+  S.tab = S.flows && S.flows.length ? "flows" : "overview";
+  setStatus("example", "Example project · open your own folder");
+  projectWorkspaceSnapshot = captureWorkspace();
+}
+
+function parseHashRoute(){
+  const raw = (location.hash || "").replace(/^#\/?/, "");
+  if (raw === "skill-flow" || raw === "skill") return { mode: "skill-flow", section: null };
+  if (raw === "project-flow" || raw === "project") return { mode: "project-flow", section: null };
+  if (raw === "what-it-is" || raw === "humans-ai" || raw === "tools") return { mode: "hub", section: raw };
+  return { mode: "hub", section: null };
+}
+
+function navigateTo(route, options = {}){
+  let targetHash = "#/";
+  if (route === "skill-flow") targetHash = "#/skill-flow";
+  else if (route === "project-flow") targetHash = "#/project-flow";
+  else if (route === "hub" && options.section) targetHash = "#" + options.section;
+
+  if (location.hash !== targetHash){
+    location.hash = targetHash;
+  } else {
+    handleRoute();
+  }
+}
 
 function setAppMode(mode, options = {}){
-  appMode = mode;
-  if (mode === "hub"){
-    if (location.hash !== "" && location.hash !== "#/" && location.hash !== "#") history.pushState(null, "", "#/");
-  } else if (mode === "skill-flow"){
-    if (location.hash !== "#/skill-flow") history.pushState(null, "", "#/skill-flow");
-  } else if (mode === "project-flow"){
-    if (location.hash !== "#/project-flow") history.pushState(null, "", "#/project-flow");
-  }
+  const prevMode = appMode;
   
+  if (prevMode === "skill-flow" && mode !== "skill-flow"){
+    skillWorkspaceSnapshot = captureWorkspace();
+  } else if (prevMode === "project-flow" && mode !== "project-flow"){
+    projectWorkspaceSnapshot = captureWorkspace();
+  }
+
+  appMode = mode;
+
   $("navHub").classList.toggle("active", mode === "hub");
   $("navSkill").classList.toggle("active", mode === "skill-flow");
   $("navProject").classList.toggle("active", mode === "project-flow");
-  
+
   if (mode === "hub"){
     $("hubScreen").hidden = false;
     $("toolWorkspace").hidden = true;
@@ -6024,6 +6168,17 @@ function setAppMode(mode, options = {}){
     $("dlBtn").hidden = true;
     $("dlAllBtn").hidden = true;
     $("undoBtn").hidden = true;
+
+    if (options.section){
+      const el = document.getElementById(options.section);
+      if (el){
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 30);
+      }
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   } else if (mode === "skill-flow"){
     $("hubScreen").hidden = true;
     $("toolWorkspace").hidden = false;
@@ -6033,29 +6188,38 @@ function setAppMode(mode, options = {}){
     $("keyBtn").hidden = false;
     $("brandTitle").textContent = "Skill Flow Mapper";
     $("brandDesc").textContent = "Map, question and fix a Claude skill or Markdown playbook.";
-    
-    // Show skill tabs
+
+    if (skillWorkspaceSnapshot){
+      restoreWorkspace(skillWorkspaceSnapshot);
+    } else if (!isSkillWorkspace(S)){
+      initSkillWorkspace();
+    }
+
     document.querySelectorAll('[data-tab="overview"], [data-tab="flows"], [data-tab="arch"], [data-tab="structure"], [data-tab="notes"]').forEach(el => el.hidden = true);
     document.querySelectorAll('[data-tab="diagram"], [data-tab="mindmap"], [data-tab="suggest"], [data-tab="changes"], [data-tab="outline"], [data-tab="source"]').forEach(el => el.hidden = false);
-    
+
     const dTab = document.querySelector('[data-tab="diagram"]');
     if (dTab) dTab.textContent = "Workflow Diagram";
-    
+
     $("folderBtn").hidden = true;
     $("uploadBtn").hidden = false;
     $("uploadBtn").innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 11V2M4 6l4-4 4 4M2 14h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Upload .md / .skill`;
     $("pasteBtn").hidden = false;
     $("gitBtnDrop").hidden = false;
     $("dropHint").innerHTML = `<strong>Upload a Claude skill (.md), playbook or .zip</strong>, paste text, or load a public GitHub skill.`;
-    
+
     $("dlBtn").hidden = false;
     $("dlAllBtn").hidden = true;
     $("undoBtn").hidden = false;
-    
+
     $("skillExampleWrap").hidden = false;
     $("projExampleWrap").hidden = true;
-    
+
     if (["overview", "flows", "arch", "structure", "notes"].includes(S.tab)) setTab("diagram");
+    else setTab(S.tab || "diagram");
+
+    renderAll();
+    window.scrollTo({ top: 0, behavior: "auto" });
   } else if (mode === "project-flow"){
     $("hubScreen").hidden = true;
     $("toolWorkspace").hidden = false;
@@ -6065,54 +6229,64 @@ function setAppMode(mode, options = {}){
     $("keyBtn").hidden = false;
     $("brandTitle").textContent = "Project Flow Mapper";
     $("brandDesc").textContent = "Open a whole project folder: see its architecture, structure and how it runs, then question and fix it.";
-    
+
+    if (projectWorkspaceSnapshot){
+      restoreWorkspace(projectWorkspaceSnapshot);
+    } else if (isSkillWorkspace(S)){
+      initProjectWorkspace();
+    }
+
     document.querySelectorAll('.panel .tabs .tab').forEach(el => el.hidden = false);
     const dTab = document.querySelector('[data-tab="diagram"]');
     if (dTab) dTab.textContent = "How it runs";
-    
+
     $("folderBtn").hidden = false;
     $("uploadBtn").hidden = false;
     $("uploadBtn").innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 11V2M4 6l4-4 4 4M2 14h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Upload files or .zip`;
     $("pasteBtn").hidden = true;
     $("gitBtnDrop").hidden = false;
     $("dropHint").innerHTML = `<strong>Open a project folder or a .zip of it</strong>, drop it here, or import a public GitHub repo.`;
-    
+
     $("dlBtn").hidden = false;
     $("dlAllBtn").hidden = false;
     $("undoBtn").hidden = false;
-    
+
     $("skillExampleWrap").hidden = true;
     $("projExampleWrap").hidden = false;
-    
+
     if (S.tab === "diagram" && S.flows && S.flows.length) setTab("flows");
+    else if (["diagram", "mindmap"].includes(S.tab)) setTab(S.flows && S.flows.length ? "flows" : "overview");
+    else setTab(S.tab || "overview");
+
+    renderAll();
+    window.scrollTo({ top: 0, behavior: "auto" });
   }
 }
 
 function handleRoute(){
-  const hash = location.hash.replace(/^#\/?/, "");
-  if (hash === "skill-flow") {
-    if (!S.files.some(f => f.path.endsWith(".md") || f.path.endsWith(".skill"))) {
-      loadSkillExample("pr-review");
-    } else {
-      setAppMode("skill-flow");
-    }
-  } else if (hash === "project-flow") {
-    if (S.files.length === 1 && S.files[0].path === "SKILL.md") {
-      loadProjectExample("order-checkout");
-    } else {
-      setAppMode("project-flow");
-    }
-  } else {
-    setAppMode("hub");
-  }
+  const { mode, section } = parseHashRoute();
+  setAppMode(mode, { section });
 }
 window.addEventListener("hashchange", handleRoute);
+window.addEventListener("popstate", handleRoute);
 
 // --- Sample Selection Functions ---
 function loadSkillExample(which){
   resetForNewFile();
-  load({ files: [{ path: "SKILL.md", text: EXAMPLE_MD }], bins: [], root: "pr-review" });
-  setAppMode("skill-flow");
+  S.isExample = true;
+  S.files = [{ path: "SKILL.md", text: EXAMPLE_MD, size: EXAMPLE_MD.length }];
+  S.bins = [];
+  S.projectName = "pr-review";
+  S.activeFile = 0;
+  S.original = S.files.map(f => ({ path: f.path, text: f.text }));
+  S.rawModel = null;
+  analyzeProject();
+  S.model = normalize(quickParse(S.files));
+  S.mode = "quick";
+  S.tab = "diagram";
+  setStatus("example", "Example skill · PR Review Playbook");
+  skillWorkspaceSnapshot = captureWorkspace();
+  navigateTo("skill-flow");
 }
 
 function loadProjectExample(which){
@@ -6127,10 +6301,10 @@ function loadProjectExample(which){
   S.rawModel = EXAMPLE_PROJECT_MODEL;
   S.model = normalize(EXAMPLE_PROJECT_MODEL);
   S.mode = "claude";
+  S.tab = S.flows && S.flows.length ? "flows" : "overview";
   setStatus("example", "Example project · open your own folder");
-  renderAll();
-  setTab(S.flows && S.flows.length ? "flows" : "overview");
-  setAppMode("project-flow");
+  projectWorkspaceSnapshot = captureWorkspace();
+  navigateTo("project-flow");
 }
 
 // --- GitHub Public Repo Importer ---
@@ -6198,7 +6372,7 @@ async function importFromGitHub(rawUrl, targetTool = "project-flow"){
       bins: [],
       root: target.repo
     });
-    setAppMode("skill-flow");
+    navigateTo("skill-flow");
     return;
   }
   
@@ -6238,38 +6412,61 @@ async function importFromGitHub(rawUrl, targetTool = "project-flow"){
   const result = await ingest(entries);
   result.root = target.repo;
   load(result);
-  setAppMode("project-flow");
+  navigateTo("project-flow");
 }
 
 function initHubAndGit(){
-  $("navHub").onclick = () => setAppMode("hub");
-  $("navSkill").onclick = () => {
-    if (!S.files.some(f => f.path.endsWith(".md") || f.path.endsWith(".skill"))) loadSkillExample("pr-review");
-    else setAppMode("skill-flow");
-  };
-  $("navProject").onclick = () => {
-    if (S.files.length === 1 && S.files[0].path === "SKILL.md") loadProjectExample("order-checkout");
-    else setAppMode("project-flow");
-  };
-
-  const openSkillFlow = () => {
-    if (!S.files.some(f => f.path.endsWith(".md") || f.path.endsWith(".skill"))) loadSkillExample("pr-review");
-    else setAppMode("skill-flow");
+  const onBrandClick = () => {
+    if (appMode !== "hub"){
+      navigateTo("hub");
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      if (location.hash && location.hash !== "#/" && location.hash !== "#") {
+        history.replaceState(null, "", "#/");
+      }
+    }
   };
 
-  const openProjectFlow = () => {
-    if (S.files.length === 1 && S.files[0].path === "SKILL.md") loadProjectExample("order-checkout");
-    else setAppMode("project-flow");
-  };
+  if ($("brandLink")){
+    $("brandLink").onclick = onBrandClick;
+    $("brandLink").onkeydown = e => {
+      if (e.key === "Enter" || e.key === " "){
+        e.preventDefault();
+        onBrandClick();
+      }
+    };
+  }
 
-  if ($("heroLaunchSkill")) $("heroLaunchSkill").onclick = openSkillFlow;
-  if ($("headerOpenToolBtn")) $("headerOpenToolBtn").onclick = openSkillFlow;
-  if ($("toolLinkSkill")) $("toolLinkSkill").onclick = openSkillFlow;
-  if ($("toolLinkProject")) $("toolLinkProject").onclick = openProjectFlow;
-  if ($("bottomCtaOpenSkill")) $("bottomCtaOpenSkill").onclick = openSkillFlow;
+  document.querySelectorAll(".footer-brand").forEach(fb => {
+    fb.style.cursor = "pointer";
+    fb.onclick = () => onBrandClick();
+  });
+
+  $("navHub").onclick = () => navigateTo("hub");
+  $("navSkill").onclick = () => navigateTo("skill-flow");
+  $("navProject").onclick = () => navigateTo("project-flow");
+
+  if ($("heroLaunchSkill")) $("heroLaunchSkill").onclick = () => navigateTo("skill-flow");
+  if ($("headerOpenToolBtn")) $("headerOpenToolBtn").onclick = () => navigateTo("skill-flow");
+  if ($("toolLinkSkill")) $("toolLinkSkill").onclick = () => navigateTo("skill-flow");
+  if ($("toolLinkProject")) $("toolLinkProject").onclick = () => navigateTo("project-flow");
+  if ($("bottomCtaOpenSkill")) $("bottomCtaOpenSkill").onclick = () => navigateTo("skill-flow");
   
   if ($("demoPrBtn")) $("demoPrBtn").onclick = () => loadSkillExample("pr-review");
   if ($("demoOrderBtn")) $("demoOrderBtn").onclick = () => loadProjectExample("order-checkout");
+
+  // In-page anchor click interception for smooth transitions
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.onclick = e => {
+      const href = a.getAttribute("href");
+      if (href === "#" || href === "#/") return;
+      const targetId = href.replace(/^#\/?/, "");
+      if (["what-it-is", "humans-ai", "tools"].includes(targetId)){
+        e.preventDefault();
+        navigateTo("hub", { section: targetId });
+      }
+    };
+  });
   
   // Interactive Hero Mockup Card Actions
   if ($("mockupAcceptBtn")) {
@@ -6349,13 +6546,15 @@ function initHubAndGit(){
     }
   };
   
-  $("hubGitGo").onclick = async () => {
-    const url = $("hubGitUrl").value.trim();
-    if (!url) return openGitModal("project-flow");
-    const tool = $("hubGitTool").value;
-    openGitModal(tool, url);
-    $("gitSubmit").click();
-  };
+  if ($("hubGitGo")){
+    $("hubGitGo").onclick = async () => {
+      const url = $("hubGitUrl")?.value?.trim();
+      if (!url) return openGitModal("project-flow");
+      const tool = $("hubGitTool")?.value || "project-flow";
+      openGitModal(tool, url);
+      $("gitSubmit").click();
+    };
+  }
 }
 
 (async function boot(){
@@ -6381,6 +6580,30 @@ function initHubAndGit(){
     analyzeProject(); S.rawModel = EXAMPLE_PROJECT_MODEL; S.model = normalize(EXAMPLE_PROJECT_MODEL); S.mode = "claude";
     setStatus("example", "Example project · open your own folder");
   }
+
+  // Initialize both workspace snapshots so switching between tools is instant and preserves edits
+  if (restored && isSkillWorkspace(S)){
+    skillWorkspaceSnapshot = captureWorkspace();
+    const projFiles = EXAMPLE_PROJECT.map(f => ({path:f.path, text:f.text, size:f.text.length}));
+    projectWorkspaceSnapshot = {
+      files: projFiles, bins: [], projectName: "order-checkout-api",
+      activeFile: Math.max(0, projFiles.findIndex(f => f.path === "README.md")), original: projFiles.map(f => ({path:f.path, text:f.text})),
+      rawModel: EXAMPLE_PROJECT_MODEL, model: normalize(EXAMPLE_PROJECT_MODEL), mode: "claude",
+      tab: "flows", isExample: true, collapsed: new Set(), treeOpen: new Set(),
+      sugg: {claude:null, stale:false, dismissed:[]}, changes: [], notes: [], chat: [], links: [], mmPos: {}, fitted: {}
+    };
+  } else {
+    projectWorkspaceSnapshot = captureWorkspace();
+    const skillFiles = [{ path: "SKILL.md", text: EXAMPLE_MD, size: EXAMPLE_MD.length }];
+    const skillModel = normalize(quickParse(skillFiles));
+    skillWorkspaceSnapshot = {
+      files: skillFiles, bins: [], projectName: "pr-review", activeFile: 0,
+      original: skillFiles.map(f => ({path:f.path, text:f.text})), rawModel: null, model: skillModel, mode: "quick",
+      tab: "diagram", isExample: true, collapsed: new Set(), treeOpen: new Set(),
+      sugg: {claude:null, stale:false, dismissed:[]}, changes: [], notes: [], chat: [], links: [], mmPos: {}, fitted: {}
+    };
+  }
+
   renderAll(); setTab(S.flows && S.flows.length ? "flows" : "overview");
   loadSettings(); applyKeyState();
   renderChat(); setSide("details");
