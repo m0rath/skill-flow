@@ -1,0 +1,18 @@
+# justools.in
+
+> justools.in builds small web tools that turn AI instructions and project plans into diagrams people can question and fix. AI suggests changes; the human decides.
+
+## Tools
+
+- [Skill Flow Mapper](https://justools.in/skill-flow-mapper): Upload a SKILL.md, Markdown playbook or zipped skill folder. See its workflow as a diagram or mind map, review AI suggestions for gaps, and export PNG, SVG, Mermaid or Markdown. Works with Claude, ChatGPT or Gemini using your own API key.
+- [Project Flow Mapper](https://justools.in/project-flow-mapper): Turn a project plan or workflow into a diagram, review AI suggestions and export the result. [CONFIRM description]
+
+## Guides
+
+- [How to write a SKILL.md file](https://justools.in/guides/how-to-write-a-skill-md): [add when published]
+- [Markdown to flowchart](https://justools.in/guides/markdown-to-flowchart): [add when published]
+- [Human-in-the-loop AI workflows](https://justools.in/guides/human-in-the-loop-ai): [add when published]
+
+## About
+
+- [Home](https://justools.in/): What justools is and how humans and AI work together on it.
