@@ -1,1 +1,53 @@
-/* App-level styles added on top of the ported design system (legacy.css). */
+/*
+  App-level styles layered on the ported design system (legacy.css).
+  Keep additions small and tokenised so light/dark stay in sync.
+*/
+
+/* Hub section links are buttons (so they can scroll within the SPA) but should read as links. */
+button.hub-nav-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Toast host: the legacy single toast element becomes a stack. */
+.toast-stack {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 60;
+  pointer-events: none;
+}
+.toast-stack .toast {
+  pointer-events: auto;
+  font: inherit;
+  cursor: pointer;
+  max-width: min(90vw, 460px);
+}
+
+/* Route-level fade for the tool pages. */
+.route-fade {
+  animation: route-in 0.28s ease both;
+}
+@keyframes route-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-fade {
+    animation: none;
+  }
+}

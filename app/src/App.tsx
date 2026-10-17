@@ -1,9 +1,11 @@
+import { useEffect } from "react";
 import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
 
 import { HubPage } from "@/features/hub/HubPage";
 import { NotFoundPage } from "@/features/NotFoundPage";
 import { ProjectFlowPage } from "@/features/project-flow/ProjectFlowPage";
 import { SkillFlowPage } from "@/features/skill-flow/SkillFlowPage";
+import { applyTheme, useAppStore } from "@/store/app";
 
 const router = createBrowserRouter([
   { path: "/", element: <HubPage /> },
@@ -16,6 +18,19 @@ const router = createBrowserRouter([
   { path: "*", element: <NotFoundPage /> },
 ]);
 
+function ThemeManager() {
+  const theme = useAppStore((s) => s.theme);
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+  return null;
+}
+
 export function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <ThemeManager />
+      <RouterProvider router={router} />
+    </>
+  );
 }
