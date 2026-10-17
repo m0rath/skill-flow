@@ -1,4 +1,5 @@
 node_modules/
 public/vendor/
+project-flow-mapper/
 package-lock.json
 fonts/
