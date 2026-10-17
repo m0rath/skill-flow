@@ -42,7 +42,9 @@ export function Header({ mode, actions }: { mode: AppMode; actions?: ReactNode }
       navigate("/");
       // Wait for the hub to render, then scroll to the section.
       requestAnimationFrame(() =>
-        requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })),
+        requestAnimationFrame(() =>
+          document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        ),
       );
     },
     [navigate],

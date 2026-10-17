@@ -258,7 +258,10 @@ const REQ: Record<
         promptFeedback?: { blockReason?: string };
       };
       if (dd.error)
-        throw { code: mapErr(dd.error.code || 0, dd.error.message || "", dd.error.status || ""), message: dd.error.message };
+        throw {
+          code: mapErr(dd.error.code || 0, dd.error.message || "", dd.error.status || ""),
+          message: dd.error.message,
+        };
       const c = dd.candidates?.[0];
       if (c?.finishReason === "MAX_TOKENS") st.stop = "len";
       if (dd.promptFeedback?.blockReason) throw { code: "refused" };
@@ -300,10 +303,7 @@ export interface ClientConfig {
  * Errors are thrown as {code, message?, text?}.
  */
 export function createClient({ provider, key, model }: ClientConfig): Client {
-  async function call(
-    input: string | Turn[],
-    opts: CallOpts = {},
-  ): Promise<{ text: string; truncated: boolean }> {
+  async function call(input: string | Turn[], opts: CallOpts = {}): Promise<{ text: string; truncated: boolean }> {
     for (let tries = 0; ; tries++) {
       try {
         return await attempt(input, opts);
@@ -356,7 +356,7 @@ export function createClient({ provider, key, model }: ClientConfig): Client {
         const t = r.parse(d, st);
         if (t) {
           text += t;
-          opts.onText && opts.onText({ text, delta: t });
+          if (opts.onText) opts.onText({ text, delta: t });
         }
       });
     } catch (e) {
@@ -413,8 +413,7 @@ export async function listModels(provider: ProviderId, key: string): Promise<Mod
     data?: { id: string; display_name?: string; created?: number }[];
     models?: { name: string; displayName?: string; supportedGenerationMethods?: string[] }[];
   };
-  if (provider === "anthropic")
-    return (j.data || []).map((m) => ({ id: m.id, name: m.display_name || m.id }));
+  if (provider === "anthropic") return (j.data || []).map((m) => ({ id: m.id, name: m.display_name || m.id }));
   if (provider === "openai") {
     const skip =
       /(audio|realtime|tts|transcribe|embedding|image|search|dall-e|whisper|moderation|instruct|babbage|davinci|computer-use|codex)/i;

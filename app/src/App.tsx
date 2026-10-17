@@ -6,6 +6,7 @@ import { NotFoundPage } from "@/features/NotFoundPage";
 import { ProjectFlowPage } from "@/features/project-flow/ProjectFlowPage";
 import { SkillFlowPage } from "@/features/skill-flow/SkillFlowPage";
 import { applyTheme, useAppStore } from "@/store/app";
+import { useAIStore } from "@/store/ai";
 
 const router = createBrowserRouter([
   { path: "/", element: <HubPage /> },
@@ -23,6 +24,9 @@ function ThemeManager() {
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+  useEffect(() => {
+    useAIStore.getState().load();
+  }, []);
   return null;
 }
 

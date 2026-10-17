@@ -91,10 +91,7 @@ export function HeroMockup() {
               <span className="m-num">{s.num}</span>
               <span className="m-text">{s.gap && added ? d.added : s.text}</span>
               {s.gap && (
-                <span
-                  className="badge-gap"
-                  style={added ? { background: "var(--make, #3A7419)" } : undefined}
-                >
+                <span className="badge-gap" style={added ? { background: "var(--make, #3A7419)" } : undefined}>
                   {added ? "ADDED" : "GAP"}
                 </span>
               )}

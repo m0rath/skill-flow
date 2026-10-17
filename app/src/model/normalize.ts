@@ -67,14 +67,10 @@ export function normalize(input: unknown): Model {
         numIndex.set(num, node.id);
         if (kind === "decision" || kind === "parallel") {
           node.question = String(raw.question || raw.title || "");
-          const br = arr(raw.branches).filter(
-            (b): b is Record<string, unknown> => !!b && typeof b === "object",
-          );
+          const br = arr(raw.branches).filter((b): b is Record<string, unknown> => !!b && typeof b === "object");
           if (kind === "decision" && br.length === 1) br.push({ label: "Otherwise", steps: [], implied: true });
           node.branches = br.map((b, i): Branch => ({
-            label: String(
-              b.label || b.condition || (kind === "parallel" ? "Track " + (i + 1) : "Case " + (i + 1)),
-            ),
+            label: String(b.label || b.condition || (kind === "parallel" ? "Track " + (i + 1) : "Case " + (i + 1))),
             implied: !!b.implied,
             steps: walk(b.steps, num + String.fromCharCode(97 + i), node.id),
           }));
