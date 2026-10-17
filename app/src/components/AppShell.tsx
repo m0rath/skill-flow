@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 
 import { type AppMode, Header } from "@/components/Header";
 import { Toaster } from "@/components/Toaster";
+import { GitImportModal } from "@/features/GitImportModal";
 
 /**
  * The shared page frame: brand header with tool navigation, the page body and the toast host.
@@ -13,6 +14,7 @@ export function AppShell({ mode, actions, children }: { mode: AppMode; actions?:
       <Header mode={mode} actions={actions} />
       {children}
       <Toaster />
+      <GitImportModal />
     </div>
   );
 }

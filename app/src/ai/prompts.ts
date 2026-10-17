@@ -84,3 +84,30 @@ Workflow outline (numbers match the diagram):
 ${outlineText(steps)}
 ${filesBlock(files, 40000)}`;
 }
+
+/** Asks for the whole project as the JSON model the project mapper expects, grounded in the call traces. */
+export function projectMapPrompt({ files, traces, deps }: { files: FileItem[]; traces: string; deps: string }): string {
+  return `You are mapping a whole software project so a reader can understand it in one view: what it is, its parts, how they depend on each other, and how it runs end to end.
+
+Reply with ONLY one JSON object, no prose:
+{"title":"project name","summary":"2 sentences: what the project does and for whom","trigger":"how it is used or started","stack":["languages, frameworks, databases, infra"],"inputs":["prerequisites: tools, services, env vars"],"notes":["important conventions (max 8)"],"commands":[{"cmd":"exact command","purpose":"what it does"}],
+ "components":[{"name":"short human name","path":"folder or file path exactly as in the tree","kind":"ui|api|service|library|cli|data|infra|config|tests|docs|other","purpose":"1 sentence","depends":["names of other components it calls"],"keyFiles":["up to 6 file paths"]}],
+ "steps":[NODE,...]}
+NODE is one of:
+ {"kind":"step","title":"...","detail":"what happens, naming the file and function","creates":[{"name":"...","kind":"file|data|message|artifact|other"}],"uses":["path/to/file.ext#functionName"],"source":"short verbatim code or doc quote"}
+ {"kind":"decision","title":"short label","question":"...?","branches":[{"label":"outcome","implied":false,"steps":[NODE,...]}]}
+ {"kind":"loop","title":"...","over":"what repeats","steps":[NODE,...]}
+ {"kind":"parallel","title":"...","branches":[{"label":"track","steps":[NODE,...]}]}
+ {"kind":"stop","title":"why it ends early"}
+Rules:
+- components: group by RESPONSIBILITY (what the code does), not by folder; 4 to 16 parts. depends = real calls between them (see the call traces).
+- steps: one end-to-end story from start to finish: setup and configuration, start-up (in call order), then each main flow (each route, command or job), following the call traces below in order. Every step must name the real file and function in "uses". Use decision nodes for the conditions shown in the traces ([when: ...]), one branch per outcome; outcomes the code does not handle get "implied": true with empty steps. 10 to 45 nodes.
+- Base everything on the code and docs; do not invent behaviour.
+
+CALL TRACES FOUND IN THE CODE (entry point → function calls in order, with conditions):
+${traces || "(no entry points detected)"}
+
+Folder-level imports:
+${deps || "(none)"}
+${filesBlock(files, 30000)}`;
+}

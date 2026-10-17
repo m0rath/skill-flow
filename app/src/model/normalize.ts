@@ -33,6 +33,21 @@ export function normalize(input: unknown): Model {
     notes: arr(m.notes as unknown).map(String),
     steps: [],
   };
+  // Project-flow fields ride along unchanged so the project views can read them.
+  const comps = arr(m.components).filter((c): c is Record<string, unknown> => !!c && typeof c === "object");
+  if (comps.length)
+    out.components = comps.map((c) => ({
+      name: String(c.name || "Component"),
+      path: String(c.path || ""),
+      kind: String(c.kind || "library"),
+      purpose: String(c.purpose || ""),
+      depends: arr(c.depends).map(String),
+      keyFiles: arr(c.keyFiles).map(String),
+    }));
+  if (arr(m.stack).length) out.stack = arr(m.stack).map(String);
+  const cmds = arr(m.commands).filter((c): c is Record<string, unknown> => !!c && typeof c === "object");
+  if (cmds.length)
+    out.commands = cmds.map((c) => ({ cmd: String(c.cmd || c.command || ""), purpose: String(c.purpose || "") }));
   index.clear();
   numIndex.clear();
   let seq = 0;

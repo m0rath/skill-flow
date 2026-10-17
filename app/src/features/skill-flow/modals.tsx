@@ -111,7 +111,11 @@ export function ShotModal({ getElement }: { getElement: () => HTMLElement | null
           legend:
             view === "mindmap"
               ? ["Structure", "Data passes (auto)", "Your links"]
-              : ["Step", "Decision", "Repeat", "Output"],
+              : view === "flows"
+                ? ["Part", "Data store", "External service", "Result sent back"]
+                : view === "arch"
+                  ? ["Component", "Depends on", "Back edge"]
+                  : ["Step", "Decision", "Repeat", "Output"],
         },
       );
       if (copy) {
@@ -156,7 +160,9 @@ export function ShotModal({ getElement }: { getElement: () => HTMLElement | null
         >
           <strong id="shotTitle">Save as image</strong>
           <p className="empty" style={{ margin: 0 }}>
-            The whole {view === "mindmap" ? "mind map" : "diagram"} is saved, not just the visible part.
+            The whole{" "}
+            {view === "mindmap" ? "mind map" : view === "flows" ? "flow" : view === "arch" ? "architecture" : "diagram"}{" "}
+            is saved, not just the visible part.
           </p>
           <div className="shot-opts">
             <span>Format</span>

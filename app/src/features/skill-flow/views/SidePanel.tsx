@@ -5,6 +5,8 @@ import { allCreates } from "@/model/normalize";
 import { md } from "@/lib/markdown";
 import type { Edit, EditResult, FlowNode } from "@/model/types";
 import { useSkillStore, type ChatMsg } from "@/features/skill-flow/store";
+import { compStats, kindPill } from "@/project/analyze";
+import { ovFn } from "@/project/overview";
 import { useAIStore } from "@/store/ai";
 import { FileIcon } from "@/components/Icons";
 
@@ -451,10 +453,324 @@ function Chat() {
   );
 }
 
+function Snippet({ path, line }: { path: string; line: number }) {
+  const files = useSkillStore((s) => s.files);
+  const setHighlight = useSkillStore((s) => s.setHighlight);
+  const setActiveFile = useSkillStore((s) => s.setActiveFile);
+  const setTab = useSkillStore((s) => s.setTab);
+  const f = files.find((x) => x.path === path);
+  if (!f || !line) return null;
+  const lines = f.text.split("\n");
+  const a = Math.max(0, line - 1 - 3);
+  const b = Math.min(lines.length, line + 3);
+  const snippet = lines.slice(a, b).join("\n");
+  return (
+    <div className="blk">
+      <span className="eyebrow">From the file</span>
+      <blockquote className="mono" style={{ whiteSpace: "pre-wrap" }}>
+        {snippet}
+      </blockquote>
+      <button
+        type="button"
+        className="linkbtn"
+        onClick={() => {
+          const at = files.findIndex((x) => x.path === path);
+          if (at >= 0) setActiveFile(at);
+          setHighlight(snippet.trim().split("\n")[0] || "");
+          setTab("source");
+        }}
+      >
+        Show in source
+      </button>
+    </div>
+  );
+}
+
+function ProjectDetails() {
+  const sel = useSkillStore((s) => s.sel);
+  const flowStep = useSkillStore((s) => s.flowStep);
+  const ovSel = useSkillStore((s) => s.ovSel);
+  const ovModel = useSkillStore((s) => s.ovModel);
+  const flowSteps = useSkillStore((s) => s.flowSteps);
+  const flow = useSkillStore((s) => s.flows[s.flowIdx]);
+  const model = useSkillStore((s) => s.model);
+  const files = useSkillStore((s) => s.files);
+  const bins = useSkillStore((s) => s.bins);
+  const setSide = useSkillStore((s) => s.setSide);
+  const setChatScope = useSkillStore((s) => s.setChatScope);
+  const sendChat = useSkillStore((s) => s.sendChat);
+  const setTab = useSkillStore((s) => s.setTab);
+  const openPath = useSkillStore((s) => s.openPath);
+  const setFlowStep = useSkillStore((s) => s.setFlowStep);
+  const setOvSel = useSkillStore((s) => s.setOvSel);
+  const select = useSkillStore((s) => s.select);
+
+  const empty = (
+    <>
+      <h3>Details</h3>
+      <p className="empty">
+        Click a step in the flow, a node in the high-level view, or a card in the architecture to see what it does and
+        what it touches.
+      </p>
+      <div className="acts">
+        <button
+          className="btn sm"
+          type="button"
+          onClick={() => {
+            setSide("chat");
+            setChatScope(null);
+            void sendChat(
+              "Explain this whole project in plain words: what it does, its main components and how they fit together, and how a typical request flows through it.",
+            );
+          }}
+        >
+          Ask AI to explain the project
+        </button>
+      </div>
+    </>
+  );
+
+  // 1. A traced flow step.
+  if (flowStep != null && flowStep >= 0 && flowSteps[flowStep]) {
+    const s = flowSteps[flowStep];
+    const filePath = s.ext ? s.from : s.to;
+    const where = s.ext ? s.to : s.toName ? `${s.to} · ${s.toName}()` : s.to;
+    return (
+      <section className="sec detail" aria-live="polite">
+        <div className="kindline">
+          <span className="num">{flowSteps.slice(0, flowStep + 1).filter((x) => !x.phase).length}</span>
+          <span className="kind" style={{ color: s.ext ? "var(--muted)" : "var(--step)" }}>
+            {s.ext ? `External · ${s.cat}` : "Flow step"}
+          </span>
+        </div>
+        <h4>{s.entry ? s.text : s.cond ? `${ovFn(s)} when ${s.cond}` : ovFn(s)}</h4>
+        <div className="blk">
+          <span className="eyebrow">Where</span>
+          {s.ext ? (
+            <span>{where}</span>
+          ) : (
+            <button type="button" className="linkbtn mono" onClick={() => openPath(s.to)}>
+              {s.to}
+            </button>
+          )}
+          {s.cond ? (
+            <div>
+              <span className="eyebrow">Only when</span>
+              <span>{s.cond}</span>
+            </div>
+          ) : null}
+        </div>
+        <Snippet path={filePath} line={s.line} />
+        <div className="acts">
+          <button className="btn sm primary" type="button" onClick={() => openPath(s.to)} disabled={s.ext}>
+            Open in Source
+          </button>
+          <button
+            className="btn sm"
+            type="button"
+            onClick={() => {
+              setSide("chat");
+              setChatScope(null);
+              void sendChat(
+                `In the flow "${flow?.name}", explain step ${flowStep + 1}: ${
+                  s.from === "actor" ? flow?.actor : `${s.from} ${s.fromName}()`
+                } calls ${s.ext ? `${s.toName} (${s.cat})` : `${s.to} ${s.toName}()`}${
+                  s.cond ? ` when ${s.cond}` : ""
+                }. What happens here, what data passes, and what could go wrong?`,
+              );
+            }}
+          >
+            Ask AI about this step
+          </button>
+          <button
+            className="btn sm"
+            type="button"
+            onClick={() => {
+              select(null);
+              setFlowStep(-1);
+            }}
+          >
+            Clear selection
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  // 2. A high-level overview node.
+  if (ovSel && ovModel) {
+    const n = ovModel.nodes.get(ovSel);
+    if (n) {
+      const desc =
+        n.kind === "actor"
+          ? "Where the flow starts, and where the result goes back to."
+          : n.kind === "code"
+            ? `${n.files.size} file${n.files.size === 1 ? "" : "s"}, ${n.fns.length} function${
+                n.fns.length === 1 ? "" : "s"
+              } used in this flow.`
+            : `${n.items.length} ${n.items.length === 1 ? "connection" : "connections"} in this flow.`;
+      return (
+        <section className="sec detail" aria-live="polite">
+          <div className="kindline">
+            <span className="kind" style={{ color: n.color }}>
+              {n.tag}
+            </span>
+          </div>
+          <h4>{n.label}</h4>
+          <p>{desc}</p>
+          {n.kind === "code" && n.fns.length ? (
+            <div className="blk">
+              <span className="eyebrow">Functions used</span>
+              <div className="chips">
+                {n.fns.slice(0, 24).map((fn) => (
+                  <span className="chip use" key={fn}>
+                    {fn}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {n.files.size ? (
+            <div className="blk">
+              <span className="eyebrow">Files</span>
+              <ul className="ov-files">
+                {[...n.files].slice(0, 12).map((p) => (
+                  <li key={p}>
+                    <button type="button" className="linkbtn mono" onClick={() => openPath(p)}>
+                      {p}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <div className="acts">
+            <button
+              className="btn sm"
+              type="button"
+              onClick={() => {
+                setSide("chat");
+                setChatScope(null);
+                void sendChat(
+                  `In the project, explain the part "${n.label}" (${n.tag}): what it does, how the flow uses it, what it reads or writes, and anything that could go wrong.`,
+                );
+              }}
+            >
+              Ask AI about this part
+            </button>
+            <button className="btn sm" type="button" onClick={() => setOvSel(null)}>
+              Clear selection
+            </button>
+          </div>
+        </section>
+      );
+    }
+  }
+
+  // 3. A component (from the architecture or overview).
+  if (sel && sel.startsWith("c:")) {
+    const name = sel.slice(2);
+    const comp = (model.components || []).find((c) => c.name === name);
+    if (comp) {
+      const st = compStats(model.components || [], files, bins, comp);
+      return (
+        <section className="sec detail" aria-live="polite">
+          <div className="kindline">
+            <span dangerouslySetInnerHTML={{ __html: kindPill(comp.kind) }} />
+            <span className="kind" style={{ color: "var(--muted)" }}>
+              {st.files} file{st.files === 1 ? "" : "s"} · {st.lines.toLocaleString()} lines
+            </span>
+          </div>
+          <h4>{comp.name}</h4>
+          {comp.purpose ? <p>{comp.purpose}</p> : null}
+          {comp.path ? (
+            <div className="blk">
+              <span className="eyebrow">Path</span>
+              <span className="mono">{comp.path}</span>
+            </div>
+          ) : null}
+          {comp.depends.length ? (
+            <div className="blk">
+              <span className="eyebrow">Depends on</span>
+              <div className="chips">
+                {comp.depends.map((d) => (
+                  <button type="button" className="chip use" key={d} onClick={() => select(`c:${d}`)}>
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <div className="blk">
+            <span className="eyebrow">Key files</span>
+            <ul className="ov-files">
+              {(comp.keyFiles.length ? comp.keyFiles : st.paths).slice(0, 12).map((p) => (
+                <li key={p}>
+                  <button type="button" className="linkbtn mono" onClick={() => openPath(p)}>
+                    {p}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="acts">
+            <button className="btn sm" type="button" onClick={() => setTab("arch")}>
+              Show in Architecture
+            </button>
+            <button className="btn sm" type="button" onClick={() => select(null)}>
+              Clear selection
+            </button>
+          </div>
+        </section>
+      );
+    }
+  }
+
+  // 4. A file (from the structure tree).
+  if (sel && sel.startsWith("f:")) {
+    const path = sel.slice(2);
+    const f = files.find((x) => x.path === path);
+    const comp = (model.components || []).find((c) => c.keyFiles.includes(path) || c.path === path);
+    return (
+      <section className="sec detail" aria-live="polite">
+        <div className="kindline">
+          <span className="kind" style={{ color: "var(--muted)" }}>
+            File
+          </span>
+        </div>
+        <h4 className="mono">{path.split("/").pop()}</h4>
+        <p className="mono" style={{ wordBreak: "break-all" }}>
+          {path}
+        </p>
+        <div className="blk">
+          <span className="eyebrow">Size</span>
+          <span>{f ? `${(f.lines || 0).toLocaleString()} lines` : "not read (binary or skipped)"}</span>
+        </div>
+        {comp ? (
+          <div className="blk">
+            <span className="eyebrow">Part of</span>
+            <button type="button" className="linkbtn" onClick={() => select(`c:${comp.name}`)}>
+              {comp.name}
+            </button>
+          </div>
+        ) : null}
+        <div className="acts">
+          <button className="btn sm primary" type="button" onClick={() => openPath(path)} disabled={!f}>
+            Open in Source
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  return <section className="sec detail">{empty}</section>;
+}
+
 export function SidePanel() {
   const side = useSkillStore((s) => s.side);
   const setSide = useSkillStore((s) => s.setSide);
   const chat = useSkillStore((s) => s.chat);
+  const appMode = useSkillStore((s) => s.appMode);
   const unread = chat.length > 0 && side !== "chat";
 
   return (
@@ -480,7 +796,7 @@ export function SidePanel() {
         </button>
       </div>
       <div className="side-body" hidden={side !== "details"}>
-        <Details />
+        {appMode === "project" ? <ProjectDetails /> : <Details />}
       </div>
       <div className="side-body" hidden={side !== "chat"}>
         <Chat />

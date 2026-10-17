@@ -25,10 +25,7 @@ function cspPlugin(): Plugin {
     name: "justools-csp",
     apply: "build",
     transformIndexHtml(html) {
-      return html.replace(
-        "<head>",
-        `<head>\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`,
-      );
+      return html.replace("<head>", `<head>\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`);
     },
   };
 }

@@ -37,6 +37,17 @@ export interface Model {
   inputs: string[];
   notes: string[];
   steps: FlowNode[];
+  /** Present in the Project Flow Mapper: the components the flow runs through. */
+  components?: {
+    name: string;
+    path: string;
+    kind: string;
+    purpose: string;
+    depends: string[];
+    keyFiles: string[];
+  }[];
+  stack?: string[];
+  commands?: { cmd: string; purpose: string }[];
 }
 
 export interface FileItem {

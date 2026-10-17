@@ -2,19 +2,38 @@ import { create } from "zustand";
 
 import { applyEdit, parseReply, FENCE } from "@/ai/edits";
 import { errCopy } from "@/ai/errors";
-import { chatInstructions, mapPrompt, reviewPrompt } from "@/ai/prompts";
+import { chatInstructions, mapPrompt, projectMapPrompt, reviewPrompt } from "@/ai/prompts";
 import type { Client } from "@/ai/providers";
 import { EXAMPLE_MD, EXAMPLE_MODEL } from "@/data/example";
+import { EXAMPLE_PROJECT, EXAMPLE_PROJECT_MODEL } from "@/data/example-project";
+import { importProjectFromGitHub } from "@/lib/github";
 import { localChecks } from "@/model/checks";
 import { index, normalize, numIndex, ordered } from "@/model/normalize";
 import { quickParse } from "@/model/quick-parse";
 import type { Edit, EditResult, FileItem, FlowNode, MindMapLink, Model, Suggestion } from "@/model/types";
+import { analyzeProject, componentsFromLocal } from "@/project/analyze";
+import { buildCodeIndex } from "@/project/code";
+import { allTracesText, findFlows, traceFlow } from "@/project/flows";
+import { buildOverview } from "@/project/overview";
+import type { BinFile, CodeIndex, Flow, FlowStep, OvModel, Project, ProjectFile } from "@/project/types";
 import { useAIStore } from "@/store/ai";
 import { useAppStore } from "@/store/app";
 
 export const STORAGE_KEY = "skillflow:v2";
+export const PROJECT_KEY = "projectflow:v1";
 
-export type SFTab = "diagram" | "mindmap" | "suggest" | "changes" | "outline" | "source";
+export type AppMode = "skill" | "project";
+export type ProjectTab = "overview" | "flows" | "arch" | "structure" | "notes";
+export type SFTab = ProjectTab | "diagram" | "mindmap" | "suggest" | "changes" | "outline" | "source";
+export type FlowMode = "overview" | "seq" | "tree";
+export type ArchLevel = "files" | "components";
+export type ShotView = "diagram" | "mindmap" | "flows" | "arch";
+export interface ProjectNote {
+  id: string;
+  file: string;
+  text: string;
+  status: "open" | "done";
+}
 export type SFSide = "details" | "chat";
 export type LoadMode = "example" | "quick" | "claude";
 export type StatusTone = "example" | "quick" | "claude" | "busy" | "error";
@@ -53,10 +72,73 @@ interface SavedSession {
   sugg?: { claude: Suggestion[] | null; stale: boolean; dismissed: string[] };
 }
 
+interface SavedProjectSession {
+  files?: ProjectFile[];
+  bins?: BinFile[];
+  original?: ProjectFile[];
+  rawModel?: unknown;
+  mode?: LoadMode;
+  dirty?: boolean;
+  projectName?: string;
+  projectRoot?: string | null;
+  customFlows?: { file: string; fn?: string }[];
+  notes?: ProjectNote[];
+  chat?: ChatMsg[];
+}
+
+/** The project equivalent of quickParse: build a flow from the README + local analysis. */
+export function quickParseProject(files: ProjectFile[], project: Project): Record<string, unknown> {
+  const readme =
+    files.find((f) => /(^|\/)readme(\.[a-z]+)?$/i.test(f.path) && !f.path.includes("/")) ||
+    files.find((f) => /(^|\/)readme(\.[a-z]+)?$/i.test(f.path)) ||
+    files.find((f) => f.path.endsWith(".md"));
+  let flow: Record<string, unknown> = { steps: [] };
+  if (readme) {
+    try {
+      flow = quickParse([{ path: readme.path, text: readme.text }]);
+    } catch {
+      flow = { steps: [] };
+    }
+  }
+  const rawSteps = Array.isArray(flow.steps) ? (flow.steps as Record<string, unknown>[]) : [];
+  const steps = rawSteps.filter((s) => s && s.title !== "No clear steps found");
+  const firstPara = readme
+    ? readme.text
+        .replace(/^---[\s\S]*?\n---/, "")
+        .split(/\n\s*\n/)
+        .map((x) => x.trim())
+        .find((x) => x && !x.startsWith("#") && !x.startsWith("!") && !x.startsWith("[")) || ""
+    : "";
+  const headingMatch = readme ? readme.text.match(/^#\s+(.+)$/m) : null;
+  return {
+    title: (headingMatch && headingMatch[1]) || flow.title || project.name,
+    summary: (flow.summary as string) || firstPara.replace(/\s+/g, " ").slice(0, 300),
+    trigger: flow.trigger || "",
+    stack: project.stack,
+    inputs: flow.inputs || [],
+    notes: flow.notes || [],
+    commands: project.commands,
+    components: componentsFromLocal(project),
+    steps: steps.length
+      ? steps
+      : rawSteps.length
+        ? rawSteps
+        : [
+            {
+              kind: "step",
+              title: "No run instructions found",
+              detail:
+                "The README doesn't describe how to install or run the project. Map with AI to infer the flow from the code.",
+            },
+          ],
+  };
+}
+
 // Abort controllers live outside React state; only one of each flow runs at a time.
 let mapCtl: AbortController | null = null;
 let suggCtl: AbortController | null = null;
 let chatCtl: AbortController | null = null;
+let entryCtl: AbortController | null = null;
 
 const cleanSugg = () => ({ claude: null as Suggestion[] | null, stale: false, dismissed: [] as string[] });
 
@@ -79,8 +161,9 @@ export interface SuggestionWithNode extends Suggestion {
 }
 
 interface SkillState {
-  files: FileItem[];
-  original: FileItem[];
+  /** Every loaded file. `ProjectFile` is a superset of `FileItem`, so both modes share this list. */
+  files: ProjectFile[];
+  original: ProjectFile[];
   activeFile: number;
   rawModel: unknown;
   model: Model;
@@ -116,17 +199,68 @@ interface SkillState {
   focus: boolean;
   setFocus: (v: boolean) => void;
   /** Screenshot dialog target. */
-  shot: { open: boolean; view: "diagram" | "mindmap" };
-  openShot: (view: "diagram" | "mindmap") => void;
+  shot: { open: boolean; view: ShotView };
+  openShot: (view: ShotView) => void;
   closeShot: () => void;
   /** Paste-Markdown dialog. */
   pasteOpen: boolean;
   setPasteOpen: (v: boolean) => void;
 
-  hydrate: () => void;
+  /* ---------- project-flow slice (shares this store so the views can be reused) ---------- */
+  appMode: AppMode;
+  project: Project | null;
+  projectName: string;
+  projectRoot: string | null;
+  bins: BinFile[];
+  code: CodeIndex | null;
+  codeErr: string;
+  flows: Flow[];
+  flowIdx: number;
+  flowMode: FlowMode;
+  flowSteps: FlowStep[];
+  ovModel: OvModel | null;
+  flowLive: boolean;
+  archLevel: ArchLevel;
+  customFlows: { file: string; fn?: string }[];
+  aiEntries: { file: string; function?: string; name?: string; trigger?: string }[];
+  notes: ProjectNote[];
+  treeOpen: string[];
+  treeFilter: string;
+  /** Which sample project is loaded ("order-checkout" | "express" | null). */
+  exampleId: string | null;
+  /** Which flow the player is currently lighting up. */
+  flowStep: number;
+  /** Selected high-level overview node key (Project Flow → Flows → High level). */
+  ovSel: string | null;
+
+  setAppMode: (m: AppMode) => void;
+  setFlowIdx: (i: number) => void;
+  setFlowMode: (m: FlowMode) => void;
+  setArchLevel: (l: ArchLevel) => void;
+  setFlowLive: (v: boolean) => void;
+  setTreeFilter: (v: string) => void;
+  setTreeOpen: (v: string[]) => void;
+  toggleTreeDir: (p: string) => void;
+  loadProject: (files: ProjectFile[], bins: BinFile[], name: string, error?: string) => void;
+  loadProjectExample: (which: "order-checkout" | "express") => void;
+  reanalyzeProject: () => void;
+  recomputeFlow: () => void;
+  setFlowStep: (i: number) => void;
+  setOvSel: (v: string | null) => void;
+  /** Ask the AI to find the entry points (routes, commands, jobs) and retrace the flows. */
+  findEntryPoints: () => Promise<void>;
+  addCustomFlow: (file: string, fn?: string) => void;
+  removeCustomFlow: (file: string, fn?: string) => void;
+  addNote: (file: string, text: string) => void;
+  toggleNote: (id: string) => void;
+  removeNote: (id: string) => void;
+
+  hydrate: (mode?: AppMode) => void;
   setTab: (t: SFTab) => void;
   setSide: (s: SFSide) => void;
   setActiveFile: (i: number) => void;
+  /** Open a file (by path) in the Source tab. */
+  openPath: (path: string) => void;
   setHighlight: (h: string | null) => void;
   setChatDraft: (v: string) => void;
   setAutoApply: (v: boolean) => void;
@@ -181,6 +315,14 @@ function savedSession(): SavedSession | null {
   }
 }
 
+function savedProjectSession(): SavedProjectSession | null {
+  try {
+    return JSON.parse(localStorage.getItem(PROJECT_KEY) || "null") as SavedProjectSession | null;
+  } catch {
+    return null;
+  }
+}
+
 export const useSkillStore = create<SkillState>()((set, get) => {
   const model = normalize(EXAMPLE_MODEL);
 
@@ -191,6 +333,29 @@ export const useSkillStore = create<SkillState>()((set, get) => {
     saveT = window.setTimeout(() => {
       const s = get();
       try {
+        if (s.appMode === "project") {
+          const payload: SavedProjectSession = {
+            files: s.files
+              .slice(0, 60)
+              .map((f) => ({ path: f.path, text: f.text.slice(0, 60000), edited: !!f.edited })),
+            bins: s.bins,
+            original: s.original.slice(0, 60).map((f) => ({ path: f.path, text: f.text.slice(0, 60000) })),
+            rawModel: s.rawModel,
+            mode: s.mode,
+            dirty: s.dirty,
+            projectName: s.projectName,
+            projectRoot: s.projectRoot,
+            customFlows: s.customFlows,
+            notes: s.notes,
+            chat: s.chat
+              .filter((m) => !m.pending)
+              .slice(-40)
+              .map((m) => ({ ...m, status: m.status === "applied" ? "applied-old" : m.status })),
+          };
+          localStorage.setItem(PROJECT_KEY, JSON.stringify(payload));
+          warnedFull = false;
+          return;
+        }
         const payload: SavedSession = {
           files: s.files
             .slice(0, 26)
@@ -300,8 +465,352 @@ export const useSkillStore = create<SkillState>()((set, get) => {
     pasteOpen: false,
     setPasteOpen: (pasteOpen) => set({ pasteOpen }),
 
-    hydrate: () => {
+    appMode: "skill",
+    project: null,
+    projectName: "",
+    projectRoot: null,
+    bins: [],
+    code: null,
+    codeErr: "",
+    flows: [],
+    flowIdx: 0,
+    flowMode: "overview",
+    flowSteps: [],
+    ovModel: null,
+    flowLive: true,
+    archLevel: "components",
+    customFlows: [],
+    aiEntries: [],
+    notes: [],
+    treeOpen: [],
+    treeFilter: "",
+    exampleId: null,
+    flowStep: -1,
+    ovSel: null,
+
+    setAppMode: (appMode) => set({ appMode }),
+    setFlowIdx: (flowIdx) => {
+      set({ flowIdx });
+      get().recomputeFlow();
+    },
+    setFlowMode: (flowMode) => {
+      set({ flowMode });
+      get().recomputeFlow();
+    },
+    setArchLevel: (archLevel) => set({ archLevel }),
+    setFlowLive: (flowLive) => set({ flowLive }),
+    setTreeFilter: (treeFilter) => set({ treeFilter }),
+    setTreeOpen: (treeOpen) => set({ treeOpen }),
+    toggleTreeDir: (p) => {
+      const open = new Set(get().treeOpen);
+      if (open.has(p)) open.delete(p);
+      else open.add(p);
+      set({ treeOpen: [...open] });
+    },
+    setFlowStep: (flowStep) => set({ flowStep }),
+    setOvSel: (ovSel) => set({ ovSel }),
+
+    reanalyzeProject: () => {
+      const s = get();
+      const usable = s.files.filter((f) => f.text && f.text.trim());
+      if (!usable.length) return;
+      const project = analyzeProject(usable, s.bins, s.projectName);
+      let code: CodeIndex | null = null;
+      let codeErr = "";
+      try {
+        code = buildCodeIndex(usable);
+      } catch (e) {
+        codeErr = (e as Error)?.message || String(e);
+      }
+      let flows: Flow[] = [];
+      try {
+        flows = code ? findFlows(usable, project, code, s.customFlows, s.aiEntries) : [];
+      } catch (e) {
+        codeErr = codeErr || (e as Error)?.message || String(e);
+      }
+      set({ project, code, codeErr, flows, flowIdx: Math.min(s.flowIdx, Math.max(0, flows.length - 1)), flowStep: -1 });
+      get().recomputeFlow();
+    },
+
+    recomputeFlow: () => {
+      const s = get();
+      const flow = s.flows[s.flowIdx];
+      if (!flow || !s.code) {
+        set({ flowSteps: [], ovModel: null });
+        return;
+      }
+      let steps: FlowStep[] = [];
+      try {
+        steps = traceFlow(s.flows, s.code, flow, flow.all ? 320 : 160, flow.all ? 6 : 9);
+      } catch {
+        steps = [];
+      }
+      let ovModel: OvModel | null = null;
+      if (s.flowMode === "overview") {
+        try {
+          ovModel = buildOverview(s.model, flow, steps);
+        } catch {
+          ovModel = null;
+        }
+      }
+      set({ flowSteps: steps, ovModel, flowStep: -1 });
+    },
+
+    loadProject: (files, bins, name, error = "") => {
+      const usable = files.filter((f) => f.text && f.text.trim());
+      if (!usable.length) {
+        set({ error: error || "No readable files were found. Open the project's root folder." });
+        return;
+      }
+      const rawModel = quickParseProject(usable, analyzeProject(usable, bins, name || "Project"));
+      set({
+        files: usable,
+        bins,
+        projectName: name || "Project",
+        projectRoot: null,
+        original: baselineOf(usable),
+        activeFile: Math.max(
+          0,
+          usable.findIndex((f) => /(^|\/)readme(\.[a-z]+)?$/i.test(f.path)),
+        ),
+        rawModel,
+        model: normalize(rawModel),
+        mode: "quick",
+        isExample: false,
+        exampleId: null,
+        sel: null,
+        collapsed: [],
+        highlight: null,
+        history: [],
+        dirty: false,
+        chat: [],
+        chatScope: null,
+        links: [],
+        mmPos: {},
+        mmLink: null,
+        sugg: cleanSugg(),
+        editing: false,
+        error,
+        notes: [],
+        customFlows: [],
+        treeOpen: [],
+        treeFilter: "",
+        status: { tone: "quick", text: "Project analysed locally" },
+        hydrated: true,
+      });
+      get().reanalyzeProject();
+      set({ tab: get().flows.some((f) => !f.all && !/^Other starting/.test(f.group)) ? "flows" : "overview" });
+      persist();
+    },
+
+    loadProjectExample: (which) => {
+      if (which === "express") {
+        void (async () => {
+          const s = get();
+          set({ busy: { ...s.busy, mapping: true }, mappingNote: "Loading Express repository…" });
+          try {
+            const files = await importProjectFromGitHub("https://github.com/expressjs/express", ({ text }) =>
+              set({ mappingNote: text }),
+            );
+            const usable = files.filter((f) => f.text && f.text.trim());
+            const rawModel = quickParseProject(usable, analyzeProject(usable, [], "express"));
+            set({
+              files: usable,
+              bins: [],
+              projectName: "express",
+              projectRoot: null,
+              original: baselineOf(usable),
+              activeFile: Math.max(
+                0,
+                usable.findIndex((f) => /(^|\/)readme(\.[a-z]+)?$/i.test(f.path)),
+              ),
+              rawModel,
+              model: normalize(rawModel),
+              mode: "quick",
+              isExample: true,
+              exampleId: "express",
+              error: "",
+              chat: [],
+              notes: [],
+              customFlows: [],
+              aiEntries: [],
+              status: { tone: "example", text: "Example project · Express framework" },
+              hydrated: true,
+            });
+            get().reanalyzeProject();
+            set({ tab: get().flows.some((f) => !f.all && !/^Other starting/.test(f.group)) ? "flows" : "overview" });
+            persist();
+          } catch (e) {
+            set({ error: (e as Error)?.message || "Could not load the Express repository." });
+          } finally {
+            set({ busy: { ...get().busy, mapping: false }, mappingNote: "" });
+          }
+        })();
+        return;
+      }
+      const files = EXAMPLE_PROJECT.map((f) => ({ path: f.path, text: f.text, size: f.text.length }));
+      const project = analyzeProject(files, [], "order-checkout-api");
+      set({
+        files,
+        bins: [],
+        projectName: "order-checkout-api",
+        projectRoot: null,
+        original: files.map((f) => ({ path: f.path, text: f.text })),
+        activeFile: Math.max(
+          0,
+          files.findIndex((f) => f.path === "README.md"),
+        ),
+        rawModel: EXAMPLE_PROJECT_MODEL,
+        model: normalize(EXAMPLE_PROJECT_MODEL),
+        project,
+        mode: "quick",
+        isExample: true,
+        exampleId: "order-checkout",
+        sel: null,
+        collapsed: [],
+        highlight: null,
+        history: [],
+        dirty: false,
+        chat: [],
+        chatScope: null,
+        links: [],
+        mmPos: {},
+        mmLink: null,
+        sugg: cleanSugg(),
+        editing: false,
+        error: "",
+        notes: [],
+        customFlows: [],
+        treeOpen: [],
+        treeFilter: "",
+        codeErr: "",
+        status: { tone: "example", text: "Example project · open your own folder" },
+        hydrated: true,
+      });
+      get().reanalyzeProject();
+      set({ tab: get().flows.some((f) => !f.all && !/^Other starting/.test(f.group)) ? "flows" : "overview" });
+      persist();
+    },
+
+    addCustomFlow: (file, fn) => {
+      const customFlows = [...get().customFlows.filter((c) => !(c.file === file && c.fn === fn)), { file, fn }];
+      set({ customFlows });
+      get().reanalyzeProject();
+      persist();
+    },
+
+    findEntryPoints: async () => {
+      const c = client();
+      if (!c) {
+        openSettings("no_key");
+        useAppStore.getState().toast("Add an API key to use AI entry points");
+        return;
+      }
+      const s = get();
+      entryCtl?.abort();
+      entryCtl = new AbortController();
+      const my = entryCtl;
+      set({ busy: { ...s.busy, mapping: true }, mappingNote: "Finding entry points…" });
+      try {
+        const list = s.files
+          .slice(0, 500)
+          .map((f) => f.path)
+          .join("\n");
+        const data = await c.json(
+          `You are given a project's file list. Find the entry points: the places execution starts (HTTP routes, CLI commands, jobs, event handlers, main functions, scheduled tasks).\n\nReply with ONLY a JSON array (max 12), most important first:\n[{"file":"exact path from the list","function":"function or handler name, or empty","name":"short human name","trigger":"what starts it"}]\n\nFiles:\n${list}`,
+          { signal: my.signal },
+        );
+        if (my !== entryCtl) return;
+        const arr = Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+        const aiEntries = arr
+          .filter((x) => x && typeof x.file === "string")
+          .map((x) => ({
+            file: String(x.file),
+            function: x.function ? String(x.function) : undefined,
+            name: x.name ? String(x.name) : undefined,
+            trigger: x.trigger ? String(x.trigger) : undefined,
+          }));
+        set({ aiEntries });
+        get().reanalyzeProject();
+        useAppStore
+          .getState()
+          .toast(
+            aiEntries.length
+              ? `Found ${aiEntries.length} entry point${aiEntries.length === 1 ? "" : "s"}`
+              : "No entry points found",
+          );
+      } catch (e) {
+        if (my !== entryCtl) return;
+        const code = (e as { code?: string } | null)?.code;
+        set({ error: errCopy(code, "Could not find the entry points. Try again.") });
+        openSettings(code);
+      } finally {
+        if (my === entryCtl) set({ busy: { ...get().busy, mapping: false }, mappingNote: "" });
+      }
+    },
+    removeCustomFlow: (file, fn) => {
+      set({ customFlows: get().customFlows.filter((c) => !(c.file === file && (fn ? c.fn === fn : !c.fn))) });
+      get().reanalyzeProject();
+      persist();
+    },
+
+    addNote: (file, text) => {
+      const t = text.trim();
+      if (!t) return;
+      const notes = [...get().notes, { id: "note-" + Date.now().toString(36), file, text: t, status: "open" as const }];
+      set({ notes });
+      persist();
+    },
+    toggleNote: (id) => {
+      const notes = get().notes.map((n) =>
+        n.id === id ? { ...n, status: n.status === "open" ? ("done" as const) : ("open" as const) } : n,
+      );
+      set({ notes });
+      persist();
+    },
+    removeNote: (id) => {
+      set({ notes: get().notes.filter((n) => n.id !== id) });
+      persist();
+    },
+
+    hydrate: (mode) => {
+      if (mode && get().appMode !== mode) set({ appMode: mode });
       if (get().hydrated) return;
+      if (mode === "project" || get().appMode === "project") {
+        const saved = savedProjectSession();
+        if (saved && saved.files && saved.files.length) {
+          const rawModel =
+            saved.rawModel ??
+            quickParseProject(
+              saved.files,
+              analyzeProject(saved.files, saved.bins || [], saved.projectName || "Project"),
+            );
+          set({
+            files: saved.files,
+            bins: saved.bins || [],
+            projectName: saved.projectName || "Project",
+            projectRoot: saved.projectRoot ?? null,
+            original: saved.original || baselineOf(saved.files),
+            rawModel,
+            model: normalize(rawModel),
+            mode: saved.mode || "quick",
+            isExample: false,
+            dirty: !!saved.dirty,
+            chat: (saved.chat as ChatMsg[]) || [],
+            customFlows: saved.customFlows || [],
+            notes: saved.notes || [],
+            status: {
+              tone: saved.mode === "claude" ? "claude" : "quick",
+              text: saved.mode === "claude" ? "Mapped by AI" : "Project analysed locally",
+            },
+            hydrated: true,
+          });
+          get().reanalyzeProject();
+        } else {
+          set({ hydrated: true });
+        }
+        return;
+      }
       const saved = savedSession();
       if (saved && saved.files && saved.files.length) {
         const rawModel = saved.rawModel ?? quickParse(saved.files);
@@ -331,6 +840,11 @@ export const useSkillStore = create<SkillState>()((set, get) => {
     setTab: (tab) => set({ tab }),
     setSide: (side) => set({ side }),
     setActiveFile: (activeFile) => set({ activeFile }),
+    openPath: (path) => {
+      const at = get().files.findIndex((f) => f.path === path || f.path.endsWith("/" + path));
+      if (at >= 0) set({ activeFile: at, tab: "source" });
+      else useAppStore.getState().toast("That file is not in the loaded set");
+    },
     setHighlight: (highlight) => set({ highlight }),
     setChatDraft: (chatDraft) => set({ chatDraft }),
     setAutoApply: (autoApply) => set({ autoApply }),
@@ -425,16 +939,37 @@ export const useSkillStore = create<SkillState>()((set, get) => {
         set({ mappingNote: text, status: { tone: "busy", text: t || "AI is reading the file…" } });
       };
       try {
-        const data = await c.json(mapPrompt(get().files), {
+        const s0 = get();
+        const isProject = s0.appMode === "project";
+        const prompt = isProject
+          ? projectMapPrompt({
+              files: s0.files,
+              traces: s0.code ? allTracesText(s0.code, s0.flows, 11000) : "",
+              deps: s0.project
+                ? s0.project.compEdges
+                    .slice(0, 60)
+                    .map((e) => `${e.from} → ${e.to}`)
+                    .join("\n")
+                : "",
+            })
+          : mapPrompt(s0.files);
+        const data = await c.json(prompt, {
           signal: my.signal,
           onText: ({ text }) => {
             if (my === mapCtl) update(text);
           },
         });
         if (my !== mapCtl) return;
+        const raw = data as { components?: unknown };
+        const nextModel = normalize(data);
+        if (Array.isArray(raw?.components) && raw.components.length) {
+          nextModel.components = raw.components as NonNullable<Model["components"]>;
+        } else if (get().project) {
+          nextModel.components = componentsFromLocal(get().project as Project);
+        }
         set({
           rawModel: data,
-          model: normalize(data),
+          model: nextModel,
           mode: "claude",
           isExample: false,
           sugg: { ...get().sugg, stale: !!get().sugg.claude },
@@ -459,6 +994,7 @@ export const useSkillStore = create<SkillState>()((set, get) => {
       mapCtl?.abort();
       suggCtl?.abort();
       chatCtl?.abort();
+      entryCtl?.abort();
     },
 
     select: (id, opts) => {
@@ -508,16 +1044,29 @@ export const useSkillStore = create<SkillState>()((set, get) => {
       if (client() && get().autoMap) {
         persist();
         void get().analyze();
-      } else {
-        const rawModel = quickParse(get().files);
+        return;
+      }
+      if (get().appMode === "project") {
+        const s = get();
+        const rawModel = s.rawModel ?? quickParseProject(s.files, analyzeProject(s.files, s.bins, s.projectName));
         set({
           rawModel,
           model: normalize(rawModel),
           mode: "quick",
-          status: { tone: "quick", text: `${why} · quick map` },
+          status: { tone: "quick", text: `${why} · re-analysed` },
         });
+        get().reanalyzeProject();
         persist();
+        return;
       }
+      const rawModel = quickParse(get().files);
+      set({
+        rawModel,
+        model: normalize(rawModel),
+        mode: "quick",
+        status: { tone: "quick", text: `${why} · quick map` },
+      });
+      persist();
     },
 
     restoreOriginal: (path) => {
@@ -548,6 +1097,7 @@ export const useSkillStore = create<SkillState>()((set, get) => {
         sugg: { ...s.sugg, stale: true },
         status: { tone: h.mode === "claude" ? "claude" : "quick", text: "Change undone" },
       });
+      if (get().appMode === "project") get().reanalyzeProject();
       persist();
       useAppStore.getState().toast("Undid the last change");
     },

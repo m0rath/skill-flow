@@ -14,6 +14,9 @@ export interface TreeItem {
   size?: number;
 }
 
+/** A source file fetched from GitHub, ready for the project mapper. */
+export type GitHubFile = FileItem & { lines: number };
+
 export function parseGitHubUrl(raw: string): GitHubTarget | null {
   const clean = raw
     .trim()
@@ -23,7 +26,8 @@ export function parseGitHubUrl(raw: string): GitHubTarget | null {
   if (parts.length < 2) return null;
   const owner = parts[0];
   const repo = parts[1];
-  let branch = "main";
+  // Empty when the link does not name a branch: we then ask GitHub for the repo's default.
+  let branch = "";
   let subpath = "";
   if (parts.length >= 4 && (parts[2] === "tree" || parts[2] === "blob")) {
     branch = parts[3];
@@ -32,26 +36,48 @@ export function parseGitHubUrl(raw: string): GitHubTarget | null {
   return { owner, repo, branch, subpath, fullName: `${owner}/${repo}` };
 }
 
+/** The GitHub API headers used for every request. */
+const GH_HEADERS = { Accept: "application/vnd.github.v3+json" };
+
 export async function fetchGitHubTree(
   owner: string,
   repo: string,
-  branch = "main",
+  branch = "",
 ): Promise<{ tree: TreeItem[]; branch: string }> {
-  const branchesToTry = [branch, branch === "main" ? "master" : "main"];
-  let data: { tree?: TreeItem[] } | null = null;
-  let usedBranch = branch;
-  for (const b of branchesToTry) {
-    const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${b}?recursive=1`;
-    const res = await fetch(url, { headers: { Accept: "application/vnd.github.v3+json" } });
-    if (res.ok) {
-      data = (await res.json()) as { tree?: TreeItem[] };
-      usedBranch = b;
-      break;
+  const readTree = async (b: string): Promise<TreeItem[] | null> => {
+    if (!b) return null;
+    try {
+      const res = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(b)}?recursive=1`,
+        { headers: GH_HEADERS },
+      );
+      if (!res.ok) return null;
+      const data = (await res.json()) as { tree?: TreeItem[] };
+      return data.tree || null;
+    } catch {
+      return null;
+    }
+  };
+
+  // No branch in the link: ask GitHub which one is the default so we never fail on a guessed name.
+  let wanted = branch;
+  if (!wanted) {
+    try {
+      const r = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: GH_HEADERS });
+      if (r.ok) wanted = ((await r.json()) as { default_branch?: string }).default_branch || "";
+    } catch {
+      /* fall through to the guesses below */
     }
   }
-  if (!data || !data.tree)
-    throw new Error(`Could not access repository tree for ${owner}/${repo}. Ensure it is public.`);
-  return { tree: data.tree, branch: usedBranch };
+
+  const tried = new Set<string>();
+  for (const b of [wanted, branch, "main", "master", "develop"].filter(Boolean)) {
+    if (tried.has(b)) continue;
+    tried.add(b);
+    const tree = await readTree(b);
+    if (tree) return { tree, branch: b };
+  }
+  throw new Error(`Could not access repository tree for ${owner}/${repo}. Ensure it is public.`);
 }
 
 async function downloadRaw(target: GitHubTarget, branch: string, path: string): Promise<string | null> {
@@ -88,7 +114,10 @@ export async function importSkillFromGitHub(rawUrl: string, onProgress: Progress
 }
 
 /** Fetch a slice of a public GitHub repo's source files for the project mapper. */
-export async function importProjectFromGitHub(rawUrl: string, onProgress: ProgressFn = () => {}): Promise<FileItem[]> {
+export async function importProjectFromGitHub(
+  rawUrl: string,
+  onProgress: ProgressFn = () => {},
+): Promise<GitHubFile[]> {
   const target = parseGitHubUrl(rawUrl);
   if (!target) throw new Error("Invalid GitHub repository URL. Use owner/repo or https://github.com/owner/repo");
   onProgress({ text: `Fetching tree for ${target.fullName}…`, percent: 6 });
@@ -112,21 +141,32 @@ export async function importProjectFromGitHub(rawUrl: string, onProgress: Progre
   if (!codeFiles.length) codeFiles = candidates.slice(0, 50);
   else if (codeFiles.length > 80) codeFiles = codeFiles.slice(0, 80);
 
-  const out: FileItem[] = [];
-  for (let i = 0; i < codeFiles.length; i++) {
-    const item = codeFiles[i];
-    onProgress({
-      text: `Downloading file ${i + 1} of ${codeFiles.length}: ${item.path}…`,
-      percent: 10 + Math.round((i / codeFiles.length) * 85),
-    });
-    try {
-      const text = await downloadRaw(target, branch, item.path);
-      if (text != null) out.push({ path: item.path, text });
-    } catch {
-      /* skip unreadable */
+  // Download a few files at a time: much faster than one-by-one, still gentle on GitHub.
+  const out: GitHubFile[] = new Array(codeFiles.length);
+  let done = 0;
+  let next = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= codeFiles.length) return;
+      const item = codeFiles[i];
+      try {
+        const text = await downloadRaw(target, branch, item.path);
+        if (text != null) out[i] = { path: item.path, text, lines: text.split("\n").length };
+      } catch {
+        /* skip unreadable */
+      }
+      done++;
+      onProgress({
+        text: `Downloading files… ${done} of ${codeFiles.length}`,
+        percent: 10 + Math.round((done / codeFiles.length) * 85),
+      });
     }
-  }
-  if (!out.length) throw new Error("No readable files could be downloaded from this repository.");
-  onProgress({ text: `Ingesting ${out.length} files…`, percent: 98 });
-  return out;
+  };
+  await Promise.all(Array.from({ length: Math.min(6, codeFiles.length) }, worker));
+
+  const files = out.filter((f): f is GitHubFile => !!f);
+  if (!files.length) throw new Error("No readable files could be downloaded from this repository.");
+  onProgress({ text: `Ingesting ${files.length} files…`, percent: 98 });
+  return files;
 }
