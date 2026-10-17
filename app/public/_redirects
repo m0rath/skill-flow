@@ -1,0 +1,11 @@
+# SPA fallback: every app route serves the same index.html.
+# Legacy URLs are redirected to the new routes inside the app router.
+/skill-flow-mapper     /index.html   200
+/skill-flow-mapper/*   /index.html   200
+/project-flow-mapper   /index.html   200
+/project-flow-mapper/* /index.html   200
+/skill-flow            /index.html   200
+/skill-flow/*          /index.html   200
+/project-flow          /index.html   200
+/project-flow/*        /index.html   200
+/*                     /index.html   200
