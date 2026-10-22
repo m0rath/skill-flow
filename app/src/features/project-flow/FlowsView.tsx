@@ -226,8 +226,13 @@ function Toolbar({ playing, onTogglePlay, onRestart, speed, setSpeed, zoom, cont
         >
           Explain this flow with AI
         </button>
-        <button className={`ib focusBtn${focus ? " on" : ""}`} type="button" onClick={() => setFocus(!focus)}>
-          Focus
+        <button
+          className={`ib focusBtn${focus ? " on" : ""}`}
+          type="button"
+          aria-pressed={focus}
+          onClick={() => setFocus(!focus)}
+        >
+          {focus ? "Exit focus" : "Focus"}
         </button>
       </div>
 

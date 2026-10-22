@@ -246,10 +246,12 @@ export function MindMap({ onElement }: { onElement?: (el: HTMLElement | null) =>
   const resetMmPositions = useSkillStore((s) => s.resetMmPositions);
   const openShot = useSkillStore((s) => s.openShot);
   const setFocus = useSkillStore((s) => s.setFocus);
+  const focus = useSkillStore((s) => s.focus);
   const setChatScope = useSkillStore((s) => s.setChatScope);
   const sendChat = useSkillStore((s) => s.sendChat);
 
   const { vpRef, innerRef, zoom, controls } = useViewport({ max: 2.5, min: 0.2 });
+  const fit = controls.fit;
   const [drag, setDrag] = useState<DragState>(null);
   const [metrics, setMetrics] = useState<Record<string, { w: number; h: number }>>({});
   const layerRef = useRef<HTMLDivElement | null>(null);
@@ -296,6 +298,12 @@ export function MindMap({ onElement }: { onElement?: (el: HTMLElement | null) =>
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model]);
+
+  // Focus mode changes the viewport size; keep the whole map fitted.
+  useEffect(() => {
+    const t = window.setTimeout(() => fit("all"), 60);
+    return () => window.clearTimeout(t);
+  }, [focus, fit]);
 
   const mmName = useCallback(
     (key: string) => {
@@ -495,8 +503,13 @@ export function MindMap({ onElement }: { onElement?: (el: HTMLElement | null) =>
         >
           Screenshot
         </button>
-        <button className="ib focusBtn" type="button" onClick={() => setFocus(true)}>
-          Focus
+        <button
+          className={`ib focusBtn${focus ? " on" : ""}`}
+          type="button"
+          aria-pressed={focus}
+          onClick={() => setFocus(!focus)}
+        >
+          {focus ? "Exit focus" : "Focus"}
         </button>
       </div>
       <div className="toolbar">

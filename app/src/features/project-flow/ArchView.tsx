@@ -64,8 +64,13 @@ export function ArchView({ onElement }: { onElement: (el: HTMLElement | null) =>
         <button className="ib" type="button" title="Save the architecture as an image" onClick={() => openShot("arch")}>
           Screenshot
         </button>
-        <button className={`ib focusBtn${focus ? " on" : ""}`} type="button" onClick={() => setFocus(!focus)}>
-          Focus
+        <button
+          className={`ib focusBtn${focus ? " on" : ""}`}
+          type="button"
+          aria-pressed={focus}
+          onClick={() => setFocus(!focus)}
+        >
+          {focus ? "Exit focus" : "Focus"}
         </button>
       </div>
       <div className="viewport" ref={vpRef}>

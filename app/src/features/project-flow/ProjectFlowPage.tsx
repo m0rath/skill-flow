@@ -181,6 +181,17 @@ export function ProjectFlowPage() {
     return () => document.body.classList.remove("focus");
   }, [focus]);
 
+  // Escape leaves focus mode (as in the legacy app); an open dialog owns Escape first.
+  useEffect(() => {
+    if (!focus) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || document.querySelector('[role="dialog"]')) return;
+      setFocus(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focus, setFocus]);
+
   // Drop folders / files anywhere on the page.
   useEffect(() => {
     const over = (e: DragEvent) => {

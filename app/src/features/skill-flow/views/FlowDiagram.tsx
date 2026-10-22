@@ -268,9 +268,11 @@ export function FlowDiagram({ onElement }: { onElement?: (el: HTMLElement | null
   const expandAll = useSkillStore((s) => s.expandAll);
   const openShot = useSkillStore((s) => s.openShot);
   const setFocus = useSkillStore((s) => s.setFocus);
+  const focus = useSkillStore((s) => s.focus);
   const toast = useAppStore((s) => s.toast);
 
   const { vpRef, innerRef, zoom, controls } = useViewport();
+  const fit = controls.fit;
   const fitted = useRef(false);
 
   const flags = useMemo(
@@ -300,6 +302,12 @@ export function FlowDiagram({ onElement }: { onElement?: (el: HTMLElement | null
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model]);
+
+  // Focus mode changes the viewport size; keep the whole flow fitted.
+  useEffect(() => {
+    const t = window.setTimeout(() => fit("width"), 60);
+    return () => window.clearTimeout(t);
+  }, [focus, fit]);
 
   useEffect(() => {
     if (!sel) return;
@@ -379,8 +387,13 @@ export function FlowDiagram({ onElement }: { onElement?: (el: HTMLElement | null
         >
           Screenshot
         </button>
-        <button className="ib focusBtn" type="button" onClick={() => setFocus(true)}>
-          Focus
+        <button
+          className={`ib focusBtn${focus ? " on" : ""}`}
+          type="button"
+          aria-pressed={focus}
+          onClick={() => setFocus(!focus)}
+        >
+          {focus ? "Exit focus" : "Focus"}
         </button>
       </div>
       <div className="viewport" ref={vpRef}>
