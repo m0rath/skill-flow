@@ -1,5 +1,5 @@
 # Builds the React app in app/ and publishes app/dist to Netlify production on every push to main,
-# after the checks pass.
+# and can also be run manually from the Actions tab (choose any branch), after the checks pass.
 # Needs the NETLIFY_AUTH_TOKEN secret and the NETLIFY_SITE_ID variable (Settings → Secrets and variables → Actions).
 # Turn off Netlify's own Git builds so each commit deploys only once.
 name: Deploy to Netlify
@@ -63,8 +63,8 @@ jobs:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
           NETLIFY_DEPLOY_TO_PROD: true
-          # The action passes the message through a shell, so it only uses the commit hash, never commit text.
-          NETLIFY_DEPLOY_MESSAGE: "main@${{ github.sha }}"
+          # The action passes the message through a shell, so never interpolate branch names or commit text.
+          NETLIFY_DEPLOY_MESSAGE: "${{ github.event_name == 'workflow_dispatch' && 'manual' || 'main' }}@${{ github.sha }}"
           build_directory: app/dist
           # The action runs each command with a plain shell, so avoid `cd ... && ...`.
           install_command: "npm ci --prefix app"
