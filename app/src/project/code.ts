@@ -789,6 +789,9 @@ export function buildCodeIndex(files: ProjectFile[]): CodeIndex {
   // symbol table
   const SY = new Map<string, Sym>();
   const byName = new Map<string, Sym[]>();
+  // Per-file symbol lookup tables: `symIn` is called once per call expression, so scanning
+  // the file's symbol list each time is a hot-path O(n²).
+  const symTables = new Map<string, { fn: Map<string, Sym>; cls: Map<string, Sym> }>();
   eachFile(P, (path, p) => {
     p.syms.forEach((s) => {
       const id =
@@ -819,21 +822,41 @@ export function buildCodeIndex(files: ProjectFile[]): CodeIndex {
   const symIn = (path: string, name: string): Sym | null => {
     const p = P[path];
     if (!p) return null;
-    return (
-      p.syms.find((s) => (s.fn || s.name) === name && s.kind !== "route" && s.kind !== "class") ||
-      p.syms.find((s) => s.name === name && s.kind === "class") ||
-      null
-    );
+    let t = symTables.get(path);
+    if (!t) {
+      const table = { fn: new Map<string, Sym>(), cls: new Map<string, Sym>() };
+      p.syms.forEach((s) => {
+        if (s.kind === "class") {
+          if (!table.cls.has(s.name)) table.cls.set(s.name, s);
+        } else if (s.kind !== "route" && !table.fn.has(s.fn || s.name)) table.fn.set(s.fn || s.name, s);
+      });
+      symTables.set(path, table);
+      t = table;
+    }
+    return t.fn.get(name) || t.cls.get(name) || null;
   };
   const idOf = (s: Sym | null | undefined): string | null => (s && typeof s.id === "string" ? s.id : null);
   const topIdOf = (p: Parsed): string => (p.top && typeof p.top.id === "string" ? p.top.id : "");
-  const enclosing = (p: Parsed, line: number): Sym | null => {
-    let best: Sym | null = null;
-    p.syms.forEach((s) => {
-      if (s.kind === "class") return;
-      if (line >= s.line && line <= s.end && (!best || s.line >= best.line)) best = s;
-    });
-    return best;
+  // Pre-fill each line with the innermost enclosing symbol once, instead of scanning all
+  // symbols of the file for every line.
+  const enclCache = new Map<string, (Sym | null)[]>();
+  const enclosing = (path: string, p: Parsed, line: number): Sym | null => {
+    let arr = enclCache.get(path);
+    if (!arr) {
+      const filled = new Array<Sym | null>(p.lines.length).fill(null);
+      p.syms.forEach((s) => {
+        if (s.kind === "class") return;
+        const from = Math.max(0, s.line);
+        const to = Math.min(p.lines.length - 1, s.end);
+        for (let i = from; i <= to; i++) {
+          const cur = filled[i];
+          if (!cur || s.line >= cur.line) filled[i] = s;
+        }
+      });
+      enclCache.set(path, filled);
+      arr = filled;
+    }
+    return arr[line] ?? null;
   };
   const extLabel = (pkg: string, member?: string | null): ExtRef => ({
     ext: true,
@@ -841,28 +864,47 @@ export function buildCodeIndex(files: ProjectFile[]): CodeIndex {
     pkg,
     label: `${pkg}${member ? "." + member : ""}`,
   });
+  // Joined file text, cached: instExt()/defOf() otherwise re-join a whole file on every call.
+  const joinedCache = new Map<string, string>();
+  const joinedText = (path: string): string => {
+    let t = joinedCache.get(path);
+    if (t === undefined) {
+      t = (P[path]?.lines || []).join("\n");
+      joinedCache.set(path, t);
+    }
+    return t;
+  };
   // an imported object that is an instance of an outside library (e.g. export const db = new Pool())
+  const instCache = new Map<string, ExtRef | null>();
   const instExt = (file: string, varName: string | undefined, method: string): ExtRef | null => {
+    const cacheKey = file + "\u0000" + (varName || "") + "\u0000" + method;
+    const cached = instCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+    let result: ExtRef | null = null;
     try {
       const q = P[file];
-      if (!q) return null;
-      const txt = q.lines.join("\n");
-      const vn = String(varName || "").replace(/[$]/g, "\\$");
-      const re =
-        vn && vn !== "default"
-          ? new RegExp(
-              "(?:^|[\\n;])\\s*(?:export\\s+)?(?:const|let|var)?\\s*" +
-                vn +
-                "\\s*(?::[^=\\n]+)?=\\s*(?:await\\s+)?(?:new\\s+)?([A-Za-z_$][\\w$]*)(?:\\.[\\w$]+)*\\s*\\(",
-            )
-          : /(?:export\s+default|module\.exports\s*=)\s*(?:new\s+)?([A-Za-z_$][\w$]*)(?:\.[\w$]+)*\s*\(/;
-      const m = txt.match(re);
-      if (!m) return null;
-      const bb = q.bind && q.bind.get(m[1]);
-      return bb && bb.pkg ? extLabel(bb.pkg, method) : null;
+      if (q) {
+        const txt = joinedText(file);
+        const vn = String(varName || "").replace(/[$]/g, "\\$");
+        const re =
+          vn && vn !== "default"
+            ? new RegExp(
+                "(?:^|[\\n;])\\s*(?:export\\s+)?(?:const|let|var)?\\s*" +
+                  vn +
+                  "\\s*(?::[^=\\n]+)?=\\s*(?:await\\s+)?(?:new\\s+)?([A-Za-z_$][\\w$]*)(?:\\.[\\w$]+)*\\s*\\(",
+              )
+            : /(?:export\s+default|module\.exports\s*=)\s*(?:new\s+)?([A-Za-z_$][\w$]*)(?:\.[\w$]+)*\s*\(/;
+        const m = txt.match(re);
+        if (m) {
+          const bb = q.bind && q.bind.get(m[1]);
+          if (bb && bb.pkg) result = extLabel(bb.pkg, method);
+        }
+      }
     } catch {
-      return null;
+      result = null;
     }
+    instCache.set(cacheKey, result);
+    return result;
   };
   // calls
   eachFile(P, (path, p) => {
@@ -871,7 +913,7 @@ export function buildCodeIndex(files: ProjectFile[]): CodeIndex {
     lines.forEach((l, i) => {
       const code = l.replace(/\/\/.*$|#.*$/, "").replace(/(["'`])(?:\\.|(?!\1).)*\1/g, '""');
       if (/^\s*(\*|\/\*)/.test(l)) return;
-      const host = enclosing(p, i) || p.top;
+      const host = enclosing(path, p, i) || p.top;
       if (!host) return;
       if (host === p.top && p.routes.some((r) => r.line === i)) return;
       if (host.kind !== "module" && i === host.line && !/=>\s*\S|\)\s*\{\s*\S/.test(code)) return;
@@ -1051,13 +1093,13 @@ export function buildCodeIndex(files: ProjectFile[]): CodeIndex {
         if (!q) return null;
         const d = q.syms.find((x) => x.exportDefault);
         if (d) return d;
-        const mm = q.lines.join("\n").match(/module\.exports\s*=\s*([A-Za-z_$][\w$]*)\s*;?\s*$/m);
+        const mm = joinedText(tf).match(/module\.exports\s*=\s*([A-Za-z_$][\w$]*)\s*;?\s*$/m);
         return mm ? symIn(tf, mm[1]) : null;
       };
       const api: Api[] = [];
       p.api = api;
       lines.forEach((l, li) => {
-        if (enclosing(p, li)) return;
+        if (enclosing(path, p, li)) return;
         for (const m of l.matchAll(/require\(\s*['"](\.[^'"]+)['"]\s*\)/g)) {
           const tf = resolveJs(path, m[1]);
           if (!tf || !P[tf]) continue;
@@ -1124,15 +1166,17 @@ export function buildCodeIndex(files: ProjectFile[]): CodeIndex {
   });
   // routes with mount prefixes
   const routes: Route[] = [];
+  // Which prefix mounts each target file (last mount wins, as in the legacy scan).
+  const mountPrefix = new Map<string, string>();
+  Object.values(P).forEach((mpp) =>
+    mpp.mounts.forEach((mo) => {
+      const b = mpp.bind.get(mo.ref);
+      if (b && b.file) mountPrefix.set(b.file, mo.prefix.replace(/\/$/, ""));
+    }),
+  );
   eachFile(P, (path, p) => {
     p.routes.forEach((r) => {
-      let prefix = "";
-      Object.entries(P).forEach(([, mpp]) =>
-        mpp.mounts.forEach((mo) => {
-          const b = mpp.bind.get(mo.ref);
-          if (b && b.file === path) prefix = mo.prefix.replace(/\/$/, "");
-        }),
-      );
+      const prefix = mountPrefix.get(path) || "";
       const full = prefix + (r.path === "/" && prefix ? "" : r.path) || "/";
       let sym: Sym | null =
         p.syms.find((s) => s.kind === "route" && s.route === r) ||

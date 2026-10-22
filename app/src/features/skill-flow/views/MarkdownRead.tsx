@@ -1,6 +1,19 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, memo, type ReactNode } from "react";
 
 import type { MdBlock } from "@/lib/md-blocks";
+
+/**
+ * Markdown links are authored in imported files, which are untrusted, so the scheme is
+ * restricted. Anything with an explicit scheme other than http(s)/mailto/tel (for example
+ * `javascript:` or `data:`) collapses to a harmless anchor instead of becoming executable.
+ */
+function safeHref(raw: string | undefined): string {
+  const href = (raw || "").trim();
+  if (!href) return "#";
+  if (/^(https?:|mailto:|tel:)/i.test(href)) return href;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return "#";
+  return href;
+}
 
 /** Render a small subset of inline Markdown as React nodes. */
 function inline(text: string, keyBase: string): ReactNode[] {
@@ -18,7 +31,7 @@ function inline(text: string, keyBase: string): ReactNode[] {
     else if (tok.startsWith("[")) {
       const mm = tok.match(/^\[([^\]]+)\]\(([^)]*)\)$/);
       nodes.push(
-        <a key={key} href={mm?.[2] || "#"} target="_blank" rel="noopener noreferrer">
+        <a key={key} href={safeHref(mm?.[2])} target="_blank" rel="noopener noreferrer">
           {mm?.[1]}
         </a>,
       );
@@ -29,7 +42,7 @@ function inline(text: string, keyBase: string): ReactNode[] {
   return nodes;
 }
 
-export function MarkdownRead({
+export const MarkdownRead = memo(function MarkdownRead({
   blocks,
   speakingRange,
   onSelect,
@@ -147,4 +160,4 @@ export function MarkdownRead({
       })}
     </article>
   );
-}
+});

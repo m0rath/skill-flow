@@ -8,10 +8,10 @@ import { EXAMPLE_MD, EXAMPLE_MODEL } from "@/data/example";
 import { EXAMPLE_PROJECT, EXAMPLE_PROJECT_MODEL } from "@/data/example-project";
 import { importProjectFromGitHub } from "@/lib/github";
 import { localChecks } from "@/model/checks";
-import { index, normalize, numIndex, ordered } from "@/model/normalize";
+import { flattenNodes, normalize, numberIndex } from "@/model/normalize";
 import { quickParse } from "@/model/quick-parse";
 import type { Edit, EditResult, FileItem, FlowNode, MindMapLink, Model, Suggestion } from "@/model/types";
-import { analyzeProject, componentsFromLocal } from "@/project/analyze";
+import { analyzeProject, componentsFromLocal, withLineCounts } from "@/project/analyze";
 import { buildCodeIndex } from "@/project/code";
 import { allTracesText, findFlows, traceFlow } from "@/project/flows";
 import { buildOverview } from "@/project/overview";
@@ -60,7 +60,11 @@ interface HistoryEntry {
   mode: LoadMode;
 }
 
+/** Bumped when the stored shape changes; older payloads are migrated by reading defensively. */
+const SESSION_VERSION = 2;
+
 interface SavedSession {
+  v?: number;
   files?: FileItem[];
   original?: FileItem[];
   rawModel?: unknown;
@@ -73,6 +77,7 @@ interface SavedSession {
 }
 
 interface SavedProjectSession {
+  v?: number;
   files?: ProjectFile[];
   bins?: BinFile[];
   original?: ProjectFile[];
@@ -139,11 +144,191 @@ let mapCtl: AbortController | null = null;
 let suggCtl: AbortController | null = null;
 let chatCtl: AbortController | null = null;
 let entryCtl: AbortController | null = null;
+/** Cancels an in-flight GitHub example download when the user loads something else. */
+let projectCtl: AbortController | null = null;
+/** Incremented by project loads so a slow example fetch cannot overwrite a newer load. */
+let projectLoadSeq = 0;
 
-const cleanSugg = () => ({ claude: null as Suggestion[] | null, stale: false, dismissed: [] as string[] });
+const cleanSugg = (): { claude: Suggestion[] | null; stale: boolean; dismissed: string[] } => ({
+  claude: null,
+  stale: false,
+  dismissed: [],
+});
+
+type Rec = Record<string, unknown>;
+const isRec = (v: unknown): v is Rec => !!v && typeof v === "object" && !Array.isArray(v);
+const asStr = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
+
+/** Rebuild saved files from untrusted storage, dropping entries that are not `{path,text}` strings. */
+function savedFileList(v: unknown): ProjectFile[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: ProjectFile[] = [];
+  for (const raw of v) {
+    if (!isRec(raw) || typeof raw.path !== "string" || typeof raw.text !== "string") continue;
+    const f: ProjectFile = { path: raw.path, text: raw.text };
+    if (typeof raw.size === "number") f.size = raw.size;
+    if (typeof raw.lines === "number") f.lines = raw.lines;
+    if (raw.virtual === true) f.virtual = true;
+    if (raw.edited === true) f.edited = true;
+    if (raw.created === true) f.created = true;
+    out.push(f);
+  }
+  return out;
+}
+
+function savedChat(v: unknown): ChatMsg[] {
+  if (!Array.isArray(v)) return [];
+  const statuses: ChatStatus[] = [
+    "proposed",
+    "applied",
+    "applied-old",
+    "pending",
+    "discarded",
+    "undone",
+    "failed",
+    "error",
+  ];
+  const out: ChatMsg[] = [];
+  for (const raw of v) {
+    if (!isRec(raw) || (raw.role !== "user" && raw.role !== "assistant")) continue;
+    const scope =
+      isRec(raw.scope) && typeof raw.scope.num === "string"
+        ? { num: raw.scope.num, title: asStr(raw.scope.title) }
+        : null;
+    const edits = Array.isArray(raw.edits)
+      ? raw.edits.flatMap((e): Edit[] => {
+          if (!isRec(e) || typeof e.find !== "string" || typeof e.replace !== "string") return [];
+          return [{ file: asStr(e.file), find: e.find, replace: e.replace }];
+        })
+      : null;
+    const results = Array.isArray(raw.results)
+      ? raw.results.flatMap((r): EditResult[] => {
+          if (!isRec(r) || typeof r.ok !== "boolean") return [];
+          const result: EditResult = { ok: r.ok };
+          if (typeof r.file === "string") result.file = r.file;
+          if (typeof r.find === "string") result.find = r.find;
+          if (typeof r.reason === "string") result.reason = r.reason;
+          return [result];
+        })
+      : null;
+    const msg: ChatMsg = {
+      role: raw.role,
+      text: asStr(raw.text),
+      edits: edits && edits.length ? edits : null,
+      pending: false,
+    };
+    if (scope) msg.scope = scope;
+    if (results && results.length) msg.results = results;
+    if (typeof raw.status === "string" && statuses.includes(raw.status as ChatStatus))
+      msg.status = raw.status as ChatStatus;
+    if (typeof raw.phase === "string") msg.phase = raw.phase;
+    if (raw.error === true) msg.error = true;
+    if (typeof raw.snap === "number") msg.snap = raw.snap;
+    out.push(msg);
+  }
+  return out;
+}
+
+function savedLinks(v: unknown): MindMapLink[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((x): MindMapLink[] => {
+    if (!isRec(x) || typeof x.from !== "string" || typeof x.to !== "string") return [];
+    return [{ from: x.from, to: x.to, label: asStr(x.label) }];
+  });
+}
+
+function savedPositions(v: unknown): Record<string, { x: number; y: number }> {
+  const out: Record<string, { x: number; y: number }> = {};
+  if (!isRec(v)) return out;
+  Object.entries(v).forEach(([k, p]) => {
+    if (isRec(p) && typeof p.x === "number" && typeof p.y === "number" && Number.isFinite(p.x) && Number.isFinite(p.y))
+      out[k] = { x: p.x, y: p.y };
+  });
+  return out;
+}
+
+function savedSugg(v: unknown): { claude: Suggestion[] | null; stale: boolean; dismissed: string[] } {
+  if (!isRec(v)) return cleanSugg();
+  const claude = Array.isArray(v.claude)
+    ? v.claude.flatMap((x): Suggestion[] => {
+        if (!isRec(x) || typeof x.id !== "string" || typeof x.title !== "string") return [];
+        const sevRaw = asStr(x.sev).toLowerCase();
+        const sev = (["high", "medium", "low"].includes(sevRaw) ? sevRaw : "medium") as Suggestion["sev"];
+        const nodeId = typeof x.nodeId === "string" ? x.nodeId : null;
+        return [
+          {
+            id: x.id,
+            sev,
+            cat: asStr(x.cat, "Other"),
+            nodeId,
+            title: x.title,
+            whatIf: asStr(x.whatIf),
+            suggestion: asStr(x.suggestion),
+          },
+        ];
+      })
+    : null;
+  return {
+    claude,
+    stale: v.stale === true,
+    dismissed: Array.isArray(v.dismissed) ? v.dismissed.filter((x): x is string => typeof x === "string") : [],
+  };
+}
+
+function savedNotes(v: unknown): ProjectNote[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((n): ProjectNote[] => {
+    if (!isRec(n) || typeof n.id !== "string" || typeof n.file !== "string") return [];
+    return [
+      {
+        id: n.id,
+        file: n.file,
+        text: asStr(n.text),
+        status: n.status === "done" ? "done" : "open",
+      },
+    ];
+  });
+}
+
+function savedCustomFlows(v: unknown): { file: string; fn?: string }[] {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set<string>();
+  return v.flatMap((c): { file: string; fn?: string }[] => {
+    if (!isRec(c) || typeof c.file !== "string" || !c.file) return [];
+    const fn = typeof c.fn === "string" && c.fn ? c.fn : undefined;
+    const key = c.file + "#" + (fn || "");
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [fn ? { file: c.file, fn } : { file: c.file }];
+  });
+}
+
+function savedBins(v: unknown): BinFile[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((b): BinFile[] => {
+    if (!isRec(b) || typeof b.path !== "string" || typeof b.size !== "number" || !Number.isFinite(b.size)) return [];
+    const bin: BinFile = { path: b.path, size: b.size, bin: true };
+    if (b.skipped === true) bin.skipped = true;
+    return [bin];
+  });
+}
+
+function savedMode(v: unknown, fallback: LoadMode): LoadMode {
+  return v === "example" || v === "quick" || v === "claude" ? v : fallback;
+}
 
 export function realFiles(files: FileItem[]): FileItem[] {
   return files.filter((f) => !f.virtual);
+}
+
+/** Drop later entries with a path already seen (a folder dropped twice would double every count). */
+function dedupePaths<T extends { path: string }>(files: T[]): T[] {
+  const seen = new Set<string>();
+  return files.filter((f) => {
+    if (seen.has(f.path)) return false;
+    seen.add(f.path);
+    return true;
+  });
 }
 
 export function fileName(f: FileItem): string {
@@ -192,6 +377,8 @@ interface SkillState {
   busy: { mapping: boolean; sugg: boolean; chat: boolean };
   mappingNote: string;
   hydrated: boolean;
+  /** Which tool's saved session has been restored into the shared state (null before any restore). */
+  hydratedFor: AppMode | null;
   /** During image export: temporarily expand collapsed branches and/or show gap markers. */
   exportMode: { expand: boolean; flags: boolean } | null;
   setExportMode: (m: { expand: boolean; flags: boolean } | null) => void;
@@ -307,81 +494,198 @@ interface SkillState {
   resetMmPositions: () => void;
 }
 
-function savedSession(): SavedSession | null {
+/** A clean, first-visit Skill Flow session (the built-in example skill). */
+function exampleSkillState(): Partial<SkillState> {
+  const files: ProjectFile[] = [{ path: "SKILL.md", text: EXAMPLE_MD }];
+  return {
+    files,
+    original: files.map((f) => ({ ...f })),
+    activeFile: 0,
+    rawModel: EXAMPLE_MODEL,
+    model: normalize(EXAMPLE_MODEL),
+    mode: "example",
+    isExample: true,
+    sel: null,
+    collapsed: [],
+    highlight: null,
+    history: [],
+    dirty: false,
+    chat: [],
+    chatScope: null,
+    chatDraft: "",
+    links: [],
+    mmPos: {},
+    mmLink: null,
+    sugg: cleanSugg(),
+    editing: false,
+    error: "",
+    tab: "diagram",
+    status: { tone: "example", text: "Example skill · PR Review Playbook" },
+  };
+}
+
+/** A clean Project Flow session with nothing loaded yet. */
+function emptyProjectState(): Partial<SkillState> {
+  return {
+    files: [],
+    original: [],
+    activeFile: 0,
+    rawModel: { steps: [] },
+    model: normalize({ steps: [] }),
+    project: null,
+    projectName: "",
+    projectRoot: null,
+    bins: [],
+    code: null,
+    codeErr: "",
+    flows: [],
+    flowIdx: 0,
+    flowSteps: [],
+    ovModel: null,
+    flowStep: -1,
+    ovSel: null,
+    customFlows: [],
+    aiEntries: [],
+    notes: [],
+    treeOpen: [],
+    treeFilter: "",
+    exampleId: null,
+    sel: null,
+    collapsed: [],
+    highlight: null,
+    history: [],
+    dirty: false,
+    chat: [],
+    chatScope: null,
+    links: [],
+    mmPos: {},
+    mmLink: null,
+    sugg: cleanSugg(),
+    editing: false,
+    error: "",
+    mode: "quick",
+    isExample: false,
+    status: { tone: "quick", text: "No project loaded" },
+  };
+}
+
+function readStored(key: string): unknown {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null") as SavedSession | null;
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as unknown) : null;
   } catch {
     return null;
   }
 }
 
-function savedProjectSession(): SavedProjectSession | null {
-  try {
-    return JSON.parse(localStorage.getItem(PROJECT_KEY) || "null") as SavedProjectSession | null;
-  } catch {
-    return null;
-  }
+function savedSession(): SavedSession | null {
+  const v = readStored(STORAGE_KEY);
+  if (!isRec(v)) return null;
+  // A payload from a newer build may use fields this build cannot interpret; start clean instead.
+  if (typeof v.v === "number" && v.v > SESSION_VERSION) return null;
+  return v as SavedSession;
 }
+
+function savedProjectSession(): SavedProjectSession | null {
+  const v = readStored(PROJECT_KEY);
+  if (!isRec(v)) return null;
+  if (typeof v.v === "number" && v.v > SESSION_VERSION) return null;
+  return v as SavedProjectSession;
+}
+
+/** Guards against duplicate page-lifecycle listeners when Vite hot-reloads this module. */
+let flushBound = false;
 
 export const useSkillStore = create<SkillState>()((set, get) => {
   const model = normalize(EXAMPLE_MODEL);
 
   let saveT: number | null = null;
   let warnedFull = false;
-  const persist = () => {
-    if (saveT) window.clearTimeout(saveT);
-    saveT = window.setTimeout(() => {
-      const s = get();
-      try {
-        if (s.appMode === "project") {
-          const payload: SavedProjectSession = {
-            files: s.files
-              .slice(0, 60)
-              .map((f) => ({ path: f.path, text: f.text.slice(0, 60000), edited: !!f.edited })),
-            bins: s.bins,
-            original: s.original.slice(0, 60).map((f) => ({ path: f.path, text: f.text.slice(0, 60000) })),
-            rawModel: s.rawModel,
-            mode: s.mode,
-            dirty: s.dirty,
-            projectName: s.projectName,
-            projectRoot: s.projectRoot,
-            customFlows: s.customFlows,
-            notes: s.notes,
-            chat: s.chat
-              .filter((m) => !m.pending)
-              .slice(-40)
-              .map((m) => ({ ...m, status: m.status === "applied" ? "applied-old" : m.status })),
-          };
-          localStorage.setItem(PROJECT_KEY, JSON.stringify(payload));
-          warnedFull = false;
-          return;
-        }
-        const payload: SavedSession = {
-          files: s.files
-            .slice(0, 26)
-            .map((f) => ({ path: f.path, text: f.text.slice(0, 80000), edited: !!f.edited, virtual: !!f.virtual })),
-          original: s.original.slice(0, 26).map((f) => ({ path: f.path, text: f.text.slice(0, 80000) })),
+  /** Serialise and write the current session for the active tool. */
+  const writeSession = () => {
+    const s = get();
+    try {
+      if (s.appMode === "project") {
+        const payload: SavedProjectSession = {
+          v: SESSION_VERSION,
+          files: s.files.slice(0, 60).map((f) => ({ path: f.path, text: f.text.slice(0, 60000), edited: !!f.edited })),
+          bins: s.bins,
+          original: s.original.slice(0, 60).map((f) => ({ path: f.path, text: f.text.slice(0, 60000) })),
           rawModel: s.rawModel,
           mode: s.mode,
           dirty: s.dirty,
+          projectName: s.projectName,
+          projectRoot: s.projectRoot,
+          customFlows: s.customFlows,
+          notes: s.notes,
           chat: s.chat
             .filter((m) => !m.pending)
             .slice(-40)
             .map((m) => ({ ...m, status: m.status === "applied" ? "applied-old" : m.status })),
-          links: s.links,
-          mmPos: s.mmPos,
-          sugg: s.sugg,
         };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        localStorage.setItem(PROJECT_KEY, JSON.stringify(payload));
         warnedFull = false;
-      } catch {
-        if (!warnedFull) {
-          warnedFull = true;
-          useAppStore.getState().toast("This browser couldn't save your session. Download your file before closing.");
-        }
+        return;
       }
+      const payload: SavedSession = {
+        v: SESSION_VERSION,
+        files: s.files
+          .slice(0, 26)
+          .map((f) => ({ path: f.path, text: f.text.slice(0, 80000), edited: !!f.edited, virtual: !!f.virtual })),
+        original: s.original.slice(0, 26).map((f) => ({ path: f.path, text: f.text.slice(0, 80000) })),
+        rawModel: s.rawModel,
+        mode: s.mode,
+        dirty: s.dirty,
+        chat: s.chat
+          .filter((m) => !m.pending)
+          .slice(-40)
+          .map((m) => ({ ...m, status: m.status === "applied" ? "applied-old" : m.status })),
+        links: s.links,
+        mmPos: s.mmPos,
+        sugg: s.sugg,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      warnedFull = false;
+    } catch (e) {
+      if (!warnedFull) {
+        warnedFull = true;
+        const name = (e as { name?: string } | null)?.name || "";
+        const quota = name === "QuotaExceededError" || name === "NS_ERROR_DOM_QUOTA_REACHED";
+        useAppStore
+          .getState()
+          .toast(
+            quota
+              ? "This session is too large for browser storage. Download your file before closing."
+              : "This browser couldn't save your session. Download your file before closing.",
+          );
+      }
+    }
+  };
+  const persist = () => {
+    if (saveT) window.clearTimeout(saveT);
+    saveT = window.setTimeout(() => {
+      saveT = null;
+      writeSession();
     }, 400);
   };
+  /** Flush a pending debounced write now, so switching tools can't persist under the wrong key. */
+  const flushSession = () => {
+    if (saveT) {
+      window.clearTimeout(saveT);
+      saveT = null;
+      writeSession();
+    }
+  };
+
+  // Never lose the last edit to the 400 ms write debounce: flush when the page is
+  // being hidden, backgrounded, or unloaded. `pagehide` also fires for bfcache.
+  if (typeof window !== "undefined" && !flushBound) {
+    flushBound = true;
+    window.addEventListener("pagehide", flushSession);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") flushSession();
+    });
+  }
 
   const client = (): Client | null => useAIStore.getState().client;
   const openSettings = (code?: string) => {
@@ -455,6 +759,7 @@ export const useSkillStore = create<SkillState>()((set, get) => {
     busy: { mapping: false, sugg: false, chat: false },
     mappingNote: "",
     hydrated: false,
+    hydratedFor: null,
     exportMode: null,
     setExportMode: (exportMode) => set({ exportMode }),
     focus: false,
@@ -488,7 +793,10 @@ export const useSkillStore = create<SkillState>()((set, get) => {
     flowStep: -1,
     ovSel: null,
 
-    setAppMode: (appMode) => set({ appMode }),
+    setAppMode: (appMode) => {
+      // Loading the other tool's session also switches mode; never change the flag alone.
+      if (get().appMode !== appMode) get().hydrate(appMode);
+    },
     setFlowIdx: (flowIdx) => {
       set({ flowIdx });
       get().recomputeFlow();
@@ -512,7 +820,8 @@ export const useSkillStore = create<SkillState>()((set, get) => {
 
     reanalyzeProject: () => {
       const s = get();
-      const usable = s.files.filter((f) => f.text && f.text.trim());
+      const files = withLineCounts(s.files);
+      const usable = files.filter((f) => f.text && f.text.trim());
       if (!usable.length) return;
       const project = analyzeProject(usable, s.bins, s.projectName);
       let code: CodeIndex | null = null;
@@ -528,7 +837,16 @@ export const useSkillStore = create<SkillState>()((set, get) => {
       } catch (e) {
         codeErr = codeErr || (e as Error)?.message || String(e);
       }
-      set({ project, code, codeErr, flows, flowIdx: Math.min(s.flowIdx, Math.max(0, flows.length - 1)), flowStep: -1 });
+      const filesChanged = files.length !== s.files.length || files.some((f, i) => f !== s.files[i]);
+      set({
+        ...(filesChanged ? { files } : {}),
+        project,
+        code,
+        codeErr,
+        flows,
+        flowIdx: Math.min(s.flowIdx, Math.max(0, flows.length - 1)),
+        flowStep: -1,
+      });
       get().recomputeFlow();
     },
 
@@ -557,9 +875,16 @@ export const useSkillStore = create<SkillState>()((set, get) => {
     },
 
     loadProject: (files, bins, name, error = "") => {
-      const usable = files.filter((f) => f.text && f.text.trim());
+      projectCtl?.abort();
+      projectCtl = null;
+      projectLoadSeq++;
+      const usable = withLineCounts(files.filter((f) => f.text && f.text.trim()));
       if (!usable.length) {
-        set({ error: error || "No readable files were found. Open the project's root folder." });
+        set({
+          error: error || "No readable files were found. Open the project's root folder.",
+          busy: { ...get().busy, mapping: false },
+          mappingNote: "",
+        });
         return;
       }
       const rawModel = quickParseProject(usable, analyzeProject(usable, bins, name || "Project"));
@@ -596,7 +921,10 @@ export const useSkillStore = create<SkillState>()((set, get) => {
         treeOpen: [],
         treeFilter: "",
         status: { tone: "quick", text: "Project analysed locally" },
+        busy: { ...get().busy, mapping: false },
+        mappingNote: "",
         hydrated: true,
+        hydratedFor: "project",
       });
       get().reanalyzeProject();
       set({ tab: get().flows.some((f) => !f.all && !/^Other starting/.test(f.group)) ? "flows" : "overview" });
@@ -604,15 +932,26 @@ export const useSkillStore = create<SkillState>()((set, get) => {
     },
 
     loadProjectExample: (which) => {
+      projectCtl?.abort();
+      projectCtl = null;
+      const seq = ++projectLoadSeq;
       if (which === "express") {
         void (async () => {
+          const my = new AbortController();
+          projectCtl = my;
           const s = get();
           set({ busy: { ...s.busy, mapping: true }, mappingNote: "Loading Express repository…" });
           try {
-            const files = await importProjectFromGitHub("https://github.com/expressjs/express", ({ text }) =>
-              set({ mappingNote: text }),
+            const files = await importProjectFromGitHub(
+              "https://github.com/expressjs/express",
+              ({ text }) => {
+                // Old fetches keep streaming progress after a newer load starts; don't let them talk.
+                if (seq === projectLoadSeq) set({ mappingNote: text });
+              },
+              my.signal,
             );
-            const usable = files.filter((f) => f.text && f.text.trim());
+            if (seq !== projectLoadSeq || my.signal.aborted) return;
+            const usable = withLineCounts(files.filter((f) => f.text && f.text.trim()));
             const rawModel = quickParseProject(usable, analyzeProject(usable, [], "express"));
             set({
               files: usable,
@@ -630,25 +969,44 @@ export const useSkillStore = create<SkillState>()((set, get) => {
               isExample: true,
               exampleId: "express",
               error: "",
+              sel: null,
+              collapsed: [],
+              highlight: null,
+              history: [],
+              dirty: false,
               chat: [],
+              chatScope: null,
+              links: [],
+              mmPos: {},
+              mmLink: null,
+              sugg: cleanSugg(),
+              editing: false,
               notes: [],
               customFlows: [],
               aiEntries: [],
+              treeOpen: [],
+              treeFilter: "",
+              codeErr: "",
               status: { tone: "example", text: "Example project · Express framework" },
               hydrated: true,
+              hydratedFor: "project",
             });
             get().reanalyzeProject();
             set({ tab: get().flows.some((f) => !f.all && !/^Other starting/.test(f.group)) ? "flows" : "overview" });
             persist();
           } catch (e) {
-            set({ error: (e as Error)?.message || "Could not load the Express repository." });
+            if (seq !== projectLoadSeq || my.signal.aborted) return;
+            set({ error: e instanceof Error && e.message ? e.message : "Could not load the Express repository." });
           } finally {
-            set({ busy: { ...get().busy, mapping: false }, mappingNote: "" });
+            if (my === projectCtl) {
+              projectCtl = null;
+              if (seq === projectLoadSeq) set({ busy: { ...get().busy, mapping: false }, mappingNote: "" });
+            }
           }
         })();
         return;
       }
-      const files = EXAMPLE_PROJECT.map((f) => ({ path: f.path, text: f.text, size: f.text.length }));
+      const files = withLineCounts(EXAMPLE_PROJECT.map((f) => ({ path: f.path, text: f.text, size: f.text.length })));
       const project = analyzeProject(files, [], "order-checkout-api");
       set({
         files,
@@ -685,7 +1043,10 @@ export const useSkillStore = create<SkillState>()((set, get) => {
         treeFilter: "",
         codeErr: "",
         status: { tone: "example", text: "Example project · open your own folder" },
+        busy: { ...get().busy, mapping: false },
+        mappingNote: "",
         hydrated: true,
+        hydratedFor: "project",
       });
       get().reanalyzeProject();
       set({ tab: get().flows.some((f) => !f.all && !/^Other starting/.test(f.group)) ? "flows" : "overview" });
@@ -721,15 +1082,18 @@ export const useSkillStore = create<SkillState>()((set, get) => {
           { signal: my.signal },
         );
         if (my !== entryCtl) return;
-        const arr = Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
-        const aiEntries = arr
-          .filter((x) => x && typeof x.file === "string")
-          .map((x) => ({
-            file: String(x.file),
-            function: x.function ? String(x.function) : undefined,
-            name: x.name ? String(x.name) : undefined,
-            trigger: x.trigger ? String(x.trigger) : undefined,
-          }));
+        const arr = Array.isArray(data) ? (data as unknown[]) : [];
+        const seen = new Set<string>();
+        const aiEntries = arr.flatMap((x) => {
+          if (!isRec(x) || typeof x.file !== "string") return [];
+          const str = (v: unknown) => (typeof v === "string" && v.trim() ? v : undefined);
+          const file = x.file;
+          const fn = str(x.function);
+          const key = file + "#" + (fn || "");
+          if (seen.has(key)) return [];
+          seen.add(key);
+          return [{ file, function: fn, name: str(x.name), trigger: str(x.trigger) }];
+        });
         set({ aiEntries });
         get().reanalyzeProject();
         useAppStore
@@ -757,7 +1121,9 @@ export const useSkillStore = create<SkillState>()((set, get) => {
     addNote: (file, text) => {
       const t = text.trim();
       if (!t) return;
-      const notes = [...get().notes, { id: "note-" + Date.now().toString(36), file, text: t, status: "open" as const }];
+      // Timestamp alone collides when two notes are added in the same millisecond.
+      const id = "note-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+      const notes = [...get().notes, { id, file, text: t, status: "open" as const }];
       set({ notes });
       persist();
     },
@@ -774,66 +1140,107 @@ export const useSkillStore = create<SkillState>()((set, get) => {
     },
 
     hydrate: (mode) => {
-      if (mode && get().appMode !== mode) set({ appMode: mode });
-      if (get().hydrated) return;
-      if (mode === "project" || get().appMode === "project") {
+      flushSession();
+      const target: AppMode = mode ?? "skill";
+      const switching = get().appMode !== target;
+      if (switching) {
+        // A reply from the other tool must not land in this one's state.
+        mapCtl?.abort();
+        suggCtl?.abort();
+        chatCtl?.abort();
+        entryCtl?.abort();
+        mapCtl = suggCtl = chatCtl = entryCtl = null;
+        // The GitHub example fetch is abortable, but also guard its continuation with the sequence.
+        projectCtl?.abort();
+        projectCtl = null;
+        projectLoadSeq++;
+      }
+      // Clear spinner flags too: the aborted requests will bail before their `finally` blocks,
+      // because the controllers above are no longer the current ones.
+      if (switching) set({ appMode: target, busy: { mapping: false, sugg: false, chat: false }, mappingNote: "" });
+      // On a mode switch always reload: the shared state currently holds the other tool's data,
+      // even though `hydratedFor` still remembers this tool from an earlier visit.
+      if (!switching && get().hydratedFor === target) return;
+      const skillTabs: SFTab[] = ["diagram", "mindmap", "suggest", "changes", "outline", "source"];
+      const projectTabs: SFTab[] = ["overview", "flows", "arch", "structure", "notes"];
+      if (target === "project") {
         const saved = savedProjectSession();
-        if (saved && saved.files && saved.files.length) {
-          const rawModel =
-            saved.rawModel ??
-            quickParseProject(
-              saved.files,
-              analyzeProject(saved.files, saved.bins || [], saved.projectName || "Project"),
-            );
+        const savedFiles = saved ? savedFileList(saved.files) : null;
+        const bins = savedBins(saved?.bins);
+        if (saved && savedFiles && savedFiles.length) {
+          const files = dedupePaths(withLineCounts(savedFiles));
+          const mode = savedMode(saved.mode, "quick");
+          const projectName =
+            typeof saved.projectName === "string" && saved.projectName ? saved.projectName : "Project";
+          const rawModel = saved.rawModel ?? quickParseProject(files, analyzeProject(files, bins, projectName));
           set({
-            files: saved.files,
-            bins: saved.bins || [],
-            projectName: saved.projectName || "Project",
-            projectRoot: saved.projectRoot ?? null,
-            original: saved.original || baselineOf(saved.files),
+            files,
+            bins,
+            projectName,
+            projectRoot: typeof saved.projectRoot === "string" ? saved.projectRoot : null,
+            original: dedupePaths(withLineCounts(savedFileList(saved.original) ?? baselineOf(files))),
             rawModel,
             model: normalize(rawModel),
-            mode: saved.mode || "quick",
+            mode,
             isExample: false,
-            dirty: !!saved.dirty,
-            chat: (saved.chat as ChatMsg[]) || [],
-            customFlows: saved.customFlows || [],
-            notes: saved.notes || [],
+            dirty: saved.dirty === true,
+            activeFile: 0,
+            chat: savedChat(saved.chat),
+            customFlows: savedCustomFlows(saved.customFlows),
+            notes: savedNotes(saved.notes),
+            tab: projectTabs.includes(get().tab) ? get().tab : "overview",
             status: {
-              tone: saved.mode === "claude" ? "claude" : "quick",
-              text: saved.mode === "claude" ? "Mapped by AI" : "Project analysed locally",
+              tone: mode === "claude" ? "claude" : "quick",
+              text: mode === "claude" ? "Mapped by AI" : "Project analysed locally",
             },
             hydrated: true,
+            hydratedFor: "project",
           });
           get().reanalyzeProject();
         } else {
-          set({ hydrated: true });
+          set({
+            ...emptyProjectState(),
+            tab: "overview",
+            hydrated: true,
+            hydratedFor: "project",
+          });
         }
         return;
       }
       const saved = savedSession();
-      if (saved && saved.files && saved.files.length) {
-        const rawModel = saved.rawModel ?? quickParse(saved.files);
+      const savedFiles = saved ? savedFileList(saved.files) : null;
+      if (saved && savedFiles && savedFiles.length) {
+        const files = dedupePaths(savedFiles);
+        const mode = savedMode(saved.mode, "quick");
+        const rawModel = saved.rawModel ?? quickParse(files);
         set({
-          files: saved.files,
-          original: saved.original || baselineOf(saved.files),
+          files,
+          original: dedupePaths(savedFileList(saved.original) ?? baselineOf(files)),
           rawModel,
           model: normalize(rawModel),
-          mode: saved.mode || "quick",
+          mode,
           isExample: false,
-          dirty: !!saved.dirty,
-          chat: (saved.chat as ChatMsg[]) || [],
-          links: saved.links || [],
-          mmPos: saved.mmPos || {},
-          sugg: saved.sugg || cleanSugg(),
+          dirty: saved.dirty === true,
+          activeFile: 0,
+          chat: savedChat(saved.chat),
+          links: savedLinks(saved.links),
+          mmPos: savedPositions(saved.mmPos),
+          sugg: savedSugg(saved.sugg),
+          tab: skillTabs.includes(get().tab) ? get().tab : "diagram",
           status: {
-            tone: saved.mode === "claude" ? "claude" : "quick",
-            text: saved.mode === "claude" ? "Mapped by AI" : "Quick map",
+            tone: mode === "claude" ? "claude" : "quick",
+            text: mode === "claude" ? "Mapped by AI" : "Quick map",
           },
           hydrated: true,
+          hydratedFor: "skill",
         });
       } else {
-        set({ hydrated: true });
+        set({
+          ...exampleSkillState(),
+          tab: "diagram",
+          hydrated: true,
+          hydratedFor: "skill",
+        });
       }
     },
 
@@ -861,10 +1268,11 @@ export const useSkillStore = create<SkillState>()((set, get) => {
           Number(!!a.virtual) - Number(!!b.virtual) ||
           Number(/(^|\/)skill\.md$/i.test(b.path)) - Number(/(^|\/)skill\.md$/i.test(a.path)),
       );
-      const rawModel = quickParse(usable);
+      const unique = dedupePaths(usable);
+      const rawModel = quickParse(unique);
       set({
-        files: usable,
-        original: baselineOf(usable),
+        files: unique,
+        original: baselineOf(unique),
         activeFile: 0,
         rawModel,
         model: normalize(rawModel),
@@ -886,6 +1294,7 @@ export const useSkillStore = create<SkillState>()((set, get) => {
         tab: "diagram",
         status: { tone: "quick", text: "Quick map (approximate)" },
         hydrated: true,
+        hydratedFor: "skill",
       });
       persist();
       if (client() && get().autoMap) void get().analyze();
@@ -894,31 +1303,7 @@ export const useSkillStore = create<SkillState>()((set, get) => {
     loadText: (text) => get().loadFiles([{ path: "pasted.md", text }]),
 
     loadExample: () => {
-      const rawModel = EXAMPLE_MODEL;
-      set({
-        files: [{ path: "SKILL.md", text: EXAMPLE_MD }],
-        original: [{ path: "SKILL.md", text: EXAMPLE_MD }],
-        activeFile: 0,
-        rawModel,
-        model: normalize(rawModel),
-        mode: "example",
-        isExample: true,
-        sel: null,
-        collapsed: [],
-        highlight: null,
-        history: [],
-        dirty: false,
-        chat: [],
-        chatScope: null,
-        links: [],
-        mmPos: {},
-        mmLink: null,
-        sugg: cleanSugg(),
-        editing: false,
-        error: "",
-        tab: "diagram",
-        status: { tone: "example", text: "Example skill · PR Review Playbook" },
-      });
+      set({ ...exampleSkillState(), hydrated: true, hydratedFor: "skill" });
       persist();
     },
 
@@ -960,13 +1345,11 @@ export const useSkillStore = create<SkillState>()((set, get) => {
           },
         });
         if (my !== mapCtl) return;
-        const raw = data as { components?: unknown };
         const nextModel = normalize(data);
-        if (Array.isArray(raw?.components) && raw.components.length) {
-          nextModel.components = raw.components as NonNullable<Model["components"]>;
-        } else if (get().project) {
-          nextModel.components = componentsFromLocal(get().project as Project);
-        }
+        // normalize() already extracts AI components (typed + defaulted). Fall back to the local
+        // analysis only when the reply carried none and we have a project to derive them from.
+        const proj = get().project;
+        if (!nextModel.components?.length && proj) nextModel.components = componentsFromLocal(proj);
         set({
           rawModel: data,
           model: nextModel,
@@ -978,7 +1361,7 @@ export const useSkillStore = create<SkillState>()((set, get) => {
         persist();
       } catch (e) {
         if (my !== mapCtl) return;
-        const code = (e as { code?: string }).code;
+        const code = isRec(e) && typeof e.code === "string" ? e.code : undefined;
         if (code === "cancelled") {
           set({ status: { tone: get().mode === "claude" ? "claude" : "quick", text: "Mapping stopped" } });
         } else {
@@ -1008,7 +1391,7 @@ export const useSkillStore = create<SkillState>()((set, get) => {
     },
 
     step: (delta) => {
-      const list = ordered();
+      const list = flattenNodes(get().model.steps);
       if (!list.length) return;
       const at = list.findIndex((n) => n.id === get().sel);
       const next = list[Math.max(0, Math.min(list.length - 1, (at < 0 ? -1 : at) + delta))];
@@ -1020,7 +1403,7 @@ export const useSkillStore = create<SkillState>()((set, get) => {
       set({ collapsed: c.includes(id) ? c.filter((x) => x !== id) : [...c, id] });
     },
     collapseAll: () => {
-      const ids = ordered()
+      const ids = flattenNodes(get().model.steps)
         .filter((n) => (n.branches || n.kind === "loop") && n.parent)
         .map((n) => n.id);
       set({ collapsed: ids });
@@ -1034,7 +1417,10 @@ export const useSkillStore = create<SkillState>()((set, get) => {
       set({ editing: false });
       if (!f || text === f.text) return;
       const files = s.files.map((x, i) => (i === s.activeFile ? { ...x, text, edited: true } : x));
-      const history = [...s.history, { files: s.files, rawModel: s.rawModel, mode: s.mode }].slice(-25);
+      const history = [
+        ...s.history,
+        { files: s.files.map((x) => ({ ...x })), rawModel: s.rawModel, mode: s.mode },
+      ].slice(-25);
       set({ files, history, dirty: true });
       get().afterFileChange("Edited by hand");
     },
@@ -1075,7 +1461,10 @@ export const useSkillStore = create<SkillState>()((set, get) => {
       const f = s.files.find((x) => x.path === path);
       if (!orig || !f) return;
       const files = s.files.map((x) => (x.path === path ? { ...x, text: orig.text, edited: false } : x));
-      const history = [...s.history, { files: s.files, rawModel: s.rawModel, mode: s.mode }].slice(-25);
+      const history = [
+        ...s.history,
+        { files: s.files.map((x) => ({ ...x })), rawModel: s.rawModel, mode: s.mode },
+      ].slice(-25);
       set({ files, history, dirty: files.some((x) => x.edited) });
       useAppStore.getState().toast(`Restored the original ${path}`);
       get().afterFileChange("Original restored");
@@ -1110,25 +1499,20 @@ export const useSkillStore = create<SkillState>()((set, get) => {
       const my = suggCtl;
       set({ busy: { ...get().busy, sugg: true }, error: "" });
       const prompt = reviewPrompt({ steps: get().model.steps, files: get().files });
+      // Map this model's step numbers, not the module-level index (another tool may own it).
+      const numbers = numberIndex(get().model.steps);
       try {
-        const data = (await c.json(prompt, { signal: my.signal })) as
-          | {
-              title?: unknown;
-              severity?: unknown;
-              category?: unknown;
-              step?: unknown;
-              whatIf?: unknown;
-              suggestion?: unknown;
-            }[]
-          | { items?: unknown[]; suggestions?: unknown[] };
+        const data = (await c.json(prompt, { signal: my.signal })) as unknown;
         if (my !== suggCtl) return;
+        const from = (v: unknown): unknown[] =>
+          Array.isArray(v) ? v : isRec(v) && Array.isArray(v.items) ? v.items : [];
         const raw = Array.isArray(data)
           ? data
-          : (data as { items?: unknown[]; suggestions?: unknown[] }).items ||
-            (data as { suggestions?: unknown[] }).suggestions ||
-            [];
+          : isRec(data) && Array.isArray(data.suggestions)
+            ? data.suggestions
+            : from(data);
         const list = raw
-          .filter((x): x is Record<string, unknown> => !!x && !!(x as { title?: unknown }).title)
+          .filter((x): x is Record<string, unknown> => isRec(x) && Boolean(x.title))
           .slice(0, 15)
           .map((x, i): Suggestion => {
             const sevRaw = String(x.severity || "").toLowerCase();
@@ -1140,14 +1524,14 @@ export const useSkillStore = create<SkillState>()((set, get) => {
               title: String(x.title),
               whatIf: String(x.whatIf || ""),
               suggestion: String(x.suggestion || ""),
-              nodeId: numIndex.get(String(x.step || "").trim()) || null,
+              nodeId: numbers.get(String(x.step || "").trim()) || null,
             };
           });
         set({ sugg: { claude: list, stale: false, dismissed: get().sugg.dismissed } });
         persist();
       } catch (e) {
         if (my !== suggCtl) return;
-        const code = (e as { code?: string }).code;
+        const code = isRec(e) && typeof e.code === "string" ? e.code : undefined;
         if (code !== "cancelled") set({ error: errCopy(code, "AI's review failed. Try again.") });
         openSettings(code);
       } finally {
@@ -1181,7 +1565,7 @@ export const useSkillStore = create<SkillState>()((set, get) => {
       const c = client();
       if (!text || !c) return;
       const s = get();
-      const scopeNode = (s.chatScope ? index.get(s.chatScope) : null) ?? null;
+      const scopeNode = s.chatScope ? (flattenNodes(s.model.steps).find((n) => n.id === s.chatScope) ?? null) : null;
       const history = s.chat.filter((m) => !m.pending && !m.error).slice(-10);
       const userMsg: ChatMsg = {
         role: "user",
@@ -1262,18 +1646,20 @@ export const useSkillStore = create<SkillState>()((set, get) => {
         persist();
         if (p.edits && p.edits.length && get().autoApply) applyMsgInternal(idx);
       } catch (e) {
-        const err = e as { code?: string; text?: string };
+        const err = isRec(e) ? e : {};
+        const code = typeof err.code === "string" ? err.code : undefined;
+        const errText = typeof err.text === "string" ? err.text : "";
         patch((m) => ({
           ...m,
           pending: false,
           phase: "",
-          error: err.code !== "cancelled",
+          error: code !== "cancelled",
           text:
-            (err.text ? parseReply(err.text).display + "\n\n" : "") +
-            (err.code === "cancelled" ? "(Stopped)" : errCopy(err.code, "AI couldn't answer. Try again.")),
+            (errText ? parseReply(errText).display + "\n\n" : "") +
+            (code === "cancelled" ? "(Stopped)" : errCopy(code, "AI couldn't answer. Try again.")),
         }));
         persist();
-        openSettings(err.code);
+        openSettings(code);
       } finally {
         if (my === chatCtl) set({ busy: { ...get().busy, chat: false } });
       }
@@ -1347,5 +1733,7 @@ export function currentSuggestions(s: Pick<SkillState, "files" | "model" | "sugg
 }
 
 export function findNode(id: string | null | undefined): FlowNode | undefined {
-  return id ? index.get(id) : undefined;
+  if (!id) return undefined;
+  // Resolve against the active model, not the module-global index another mapper may own.
+  return flattenNodes(useSkillStore.getState().model.steps).find((n) => n.id === id);
 }

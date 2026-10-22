@@ -5,13 +5,17 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "node_modules/**", "_ref/**"] },
+  { ignores: ["dist/**", "node_modules/**", "_ref/**", "public/**", "coverage/**"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: 2023,
       globals: globals.browser,
+    },
+    linterOptions: {
+      // Surface `eslint-disable` comments that no longer suppress anything.
+      reportUnusedDisableDirectives: "warn",
     },
     plugins: {
       "react-hooks": reactHooks,

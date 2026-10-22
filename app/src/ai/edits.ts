@@ -8,6 +8,35 @@ export interface ParsedReply {
   open: boolean;
 }
 
+/** Keep only well-formed edits; a missing `file` is left empty (the caller falls back to matching). */
+function toEdits(v: unknown): Edit[] | null {
+  if (!Array.isArray(v)) return null;
+  const out = v.flatMap((x): Edit[] => {
+    if (!x || typeof x !== "object") return [];
+    const r = x as Record<string, unknown>;
+    if (typeof r.find !== "string" || typeof r.replace !== "string") return [];
+    return [{ file: typeof r.file === "string" ? r.file : "", find: r.find, replace: r.replace }];
+  });
+  return out.length ? out : null;
+}
+
+function parseEdits(body: string): Edit[] | null {
+  try {
+    return toEdits(JSON.parse(body.trim()) as unknown);
+  } catch {
+    const a = body.indexOf("[");
+    const b = body.lastIndexOf("]");
+    if (a >= 0 && b > a) {
+      try {
+        return toEdits(JSON.parse(body.slice(a, b + 1)) as unknown);
+      } catch {
+        /* ignore malformed block */
+      }
+    }
+    return null;
+  }
+}
+
 /** Split a chat reply into the prose shown to the user and any `edits` fenced block. */
 export function parseReply(text: string): ParsedReply {
   const i = text.indexOf(FENCE + "edits");
@@ -15,27 +44,9 @@ export function parseReply(text: string): ParsedReply {
   const rest = text.slice(i + FENCE.length + 5);
   const j = rest.indexOf(FENCE);
   const body = j >= 0 ? rest.slice(0, j) : rest;
-  let edits: Edit[] | null = null;
-  if (j >= 0) {
-    try {
-      edits = JSON.parse(body.trim()) as Edit[];
-    } catch {
-      const a = body.indexOf("[");
-      const b = body.lastIndexOf("]");
-      if (a >= 0 && b > a) {
-        try {
-          edits = JSON.parse(body.slice(a, b + 1)) as Edit[];
-        } catch {
-          /* ignore malformed block */
-        }
-      }
-    }
-  }
   return {
     display: text.slice(0, i).trim(),
-    edits: Array.isArray(edits)
-      ? edits.filter((x) => x && typeof x.find === "string" && typeof x.replace === "string")
-      : null,
+    edits: parseEdits(body),
     open: j < 0,
   };
 }

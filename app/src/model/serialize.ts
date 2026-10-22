@@ -30,7 +30,16 @@ export function toMermaid(steps: FlowNode[]): string {
   const lines = ["flowchart TD"];
   let k = 0;
   const lab = (s: string) =>
-    '"' + String(s).replace(/"/g, "#quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;").slice(0, 110) + '"';
+    '"' +
+    String(s)
+      .replace(/\r?\n/g, " ")
+      .replace(/#/g, "#35;")
+      .replace(/&/g, "#38;")
+      .replace(/"/g, "#quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .slice(0, 110) +
+    '"';
   const link = (prev: { id: string; label?: string }[], id: string) =>
     prev.forEach((p) => lines.push(`  ${p.id} -->${p.label ? "|" + lab(p.label) + "|" : ""} ${id}`));
 

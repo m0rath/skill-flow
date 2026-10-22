@@ -592,7 +592,26 @@ export function MindMap({ onElement }: { onElement?: (el: HTMLElement | null) =>
                 .join(" ");
               const p = pos(m);
               return (
-                <div key={m.key} className={cls} data-key={m.key} style={{ left: p.x + ox, top: p.y + oy }}>
+                <div
+                  key={m.key}
+                  className={cls}
+                  data-key={m.key}
+                  style={{ left: p.x + ox, top: p.y + oy }}
+                  role={m.id ? "button" : undefined}
+                  tabIndex={m.id ? 0 : undefined}
+                  aria-pressed={m.id ? sel === m.id : undefined}
+                  aria-label={m.id ? `${m.num ? m.num + ". " : ""}${m.label}` : undefined}
+                  onKeyDown={
+                    m.id
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            select(m.id as string);
+                          }
+                        }
+                      : undefined
+                  }
+                >
                   {m.num ? <span className="num">{m.num}</span> : null}
                   {m.label}
                   {m.id && showFlags && flags.has(m.id) && m.key.startsWith("n:") ? (
@@ -612,6 +631,16 @@ export function MindMap({ onElement }: { onElement?: (el: HTMLElement | null) =>
                 className={`mm-lchip${mmLink === i ? " sel" : ""}`}
                 data-link={i}
                 style={{ left: mid.x, top: mid.y }}
+                role="button"
+                tabIndex={0}
+                aria-pressed={mmLink === i}
+                aria-label={`Edit link: ${links[i].label || `${mmName(links[i].from)} to ${mmName(links[i].to)}`}`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    selectLink(i);
+                  }
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
                   selectLink(i);

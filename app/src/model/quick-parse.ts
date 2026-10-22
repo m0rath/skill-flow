@@ -4,14 +4,18 @@ const MAKE_VERB = /\b(creat|writ|sav|generat|output|produc|export|build|emit|ren
 export const INPUT_DIR = /^(templates?|references?|scripts?|examples?|assets?|docs?)\//i;
 
 export function frontmatter(text: string): { meta: Record<string, string>; body: string } {
-  const m = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
-  if (!m) return { meta: {}, body: text };
+  // Normalise CRLF / lone CR and drop a BOM so headings, fences and the closing `---` are matched.
+  const t = String(text ?? "")
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n?/g, "\n");
+  const m = t.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
+  if (!m) return { meta: {}, body: t };
   const meta: Record<string, string> = {};
   m[1].split("\n").forEach((l) => {
     const k = l.match(/^([\w-]+):\s*(.*)$/);
     if (k) meta[k[1]] = k[2].replace(/^["']|["']$/g, "");
   });
-  return { meta, body: text.slice(m[0].length) };
+  return { meta, body: t.slice(m[0].length) };
 }
 
 const clean = (s: string) =>
@@ -31,6 +35,7 @@ export function extract(body: string): { creates: { name: string; kind: string }
   const creates: { name: string; kind: string }[] = [];
   const uses: string[] = [];
   const seen = new Set<string>();
+  FILE_RE.lastIndex = 0;
   body.split(/(?<=[.!?])\s+|\n/).forEach((sent) => {
     const verb = MAKE_VERB.test(sent);
     for (const m of sent.matchAll(FILE_RE)) {
@@ -146,6 +151,22 @@ interface Section {
 
 export function quickParse(files: { path: string; text: string }[]): Record<string, unknown> {
   const primary = files.find((f) => /(^|\/)skill\.md$/i.test(f.path)) || files[0];
+  if (!primary) {
+    return {
+      title: "",
+      summary: "",
+      trigger: "",
+      inputs: [],
+      notes: [],
+      steps: [
+        {
+          kind: "step",
+          title: "No files to map",
+          detail: "Upload a Markdown file or paste text to map its flow.",
+        },
+      ],
+    };
+  }
   const { meta, body } = frontmatter(primary.text);
   const sections: Section[] = [];
   let cur: Section = { level: 0, title: "", lines: [] };

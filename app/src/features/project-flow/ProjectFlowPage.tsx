@@ -4,10 +4,11 @@ import JSZip from "jszip";
 
 import { AppShell } from "@/components/AppShell";
 import { AISettingsModal } from "@/components/AISettingsModal";
-import { GitHubIcon } from "@/components/Icons";
+import { DownloadIcon, GitHubIcon } from "@/components/Icons";
+import { tablistKeyDown } from "@/components/a11y";
 import { ShotModal } from "@/features/skill-flow/modals";
 import { SummaryBar } from "@/features/skill-flow/SummaryBar";
-import { fileName, realFiles, useSkillStore } from "@/features/skill-flow/store";
+import { realFiles, useSkillStore } from "@/features/skill-flow/store";
 import { offerDownload } from "@/features/skill-flow/files";
 import { ArchView } from "@/features/project-flow/ArchView";
 import { FlowsView } from "@/features/project-flow/FlowsView";
@@ -101,16 +102,7 @@ function ToolActions() {
         Undo
       </button>
       <button className="btn primary" type="button" onClick={() => void downloadZip()} disabled={!real.length}>
-        <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
-          <path
-            d="M8 2v9M4 7l4 4 4-4M2 14h12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <DownloadIcon />
         <span>Download {projectName || "project"}.zip</span>
         {dirty && <span className="dotmark" />}
       </button>
@@ -131,7 +123,6 @@ function ToolActions() {
           {changed} changed
         </button>
       )}
-      <span hidden>{fileName(real[0] || { path: "" })}</span>
     </>
   );
 }
@@ -140,8 +131,8 @@ function AiBanner() {
   const mappingNote = useSkillStore((s) => s.mappingNote);
   const stopAll = useSkillStore((s) => s.stopAll);
   return (
-    <div className="ai-banner">
-      <span className="ai-banner-spinner" />
+    <div className="ai-banner" role="status" aria-live="polite">
+      <span className="ai-banner-spinner" aria-hidden="true" />
       <div className="ai-banner-content">
         <strong>AI is analyzing…</strong>
         <span>{mappingNote || "Mapping project structure and dependencies"}</span>
@@ -231,32 +222,52 @@ export function ProjectFlowPage() {
     [files, model, sugg],
   );
   const changedCount = useMemo(() => {
-    const now = realFiles(files);
-    const paths = [...new Set([...original.map((f) => f.path), ...now.map((f) => f.path)])];
-    return paths.filter(
-      (p) => (original.find((f) => f.path === p)?.text ?? "") !== (now.find((f) => f.path === p)?.text ?? ""),
-    ).length;
+    // Map both sides once: .find() per path made this quadratic on large projects.
+    const before = new Map(original.map((f) => [f.path, f.text] as const));
+    const after = new Map(realFiles(files).map((f) => [f.path, f.text] as const));
+    let n = 0;
+    new Set([...before.keys(), ...after.keys()]).forEach((p) => {
+      if ((before.get(p) ?? "") !== (after.get(p) ?? "")) n++;
+    });
+    return n;
   }, [files, original]);
   const openNotes = notes.filter((n) => n.status === "open").length;
 
   return (
     <AppShell mode="project-flow" actions={<ToolActions />}>
       <ProjectDropBar />
-      {error ? <div className="err">{error}</div> : null}
-      {codeErr ? <div className="err">Some files could not be parsed: {codeErr}</div> : null}
+      {error ? (
+        <div className="err" role="alert">
+          {error}
+        </div>
+      ) : null}
+      {codeErr ? (
+        <div className="err" role="alert">
+          Some files could not be parsed: {codeErr}
+        </div>
+      ) : null}
       <SummaryBar />
 
       <div className="main">
         <section className="panel" aria-label="Project">
           {busy.mapping && <AiBanner />}
-          <div className="tabs" role="tablist">
+          <div
+            className="tabs"
+            role="tablist"
+            aria-label="Project views"
+            onKeyDown={(e) => tablistKeyDown(e, (id) => setTab(id as SFTab))}
+          >
             {TABS.map((t) => (
               <button
                 key={t.id}
                 className="tab"
                 role="tab"
                 type="button"
+                id={`tab-${t.id}`}
+                data-tab-id={t.id}
+                aria-controls="view-panel"
                 aria-selected={tab === t.id}
+                tabIndex={tab === t.id ? 0 : -1}
                 onClick={() => setTab(t.id)}
               >
                 {t.label}
@@ -267,29 +278,31 @@ export function ProjectFlowPage() {
             ))}
           </div>
 
-          {tab === "overview" && (
-            <div id="view-overview" className="scroll">
-              <OverviewView />
-            </div>
-          )}
-          {tab === "flows" && <FlowsView onElement={(el) => (viewEl.current = el)} />}
-          {tab === "arch" && <ArchView onElement={(el) => (viewEl.current = el)} />}
-          {tab === "structure" && <StructureView />}
-          {tab === "diagram" && (
-            <div id="view-diagram">
-              <FlowDiagram onElement={(el) => (viewEl.current = el)} />
-            </div>
-          )}
-          {tab === "mindmap" && (
-            <div id="view-mindmap">
-              <MindMap onElement={(el) => (viewEl.current = el)} />
-            </div>
-          )}
-          {tab === "suggest" && <SuggestionsView />}
-          {tab === "changes" && <ChangesView />}
-          {tab === "notes" && <NotesView />}
-          {tab === "outline" && <OutlineView />}
-          {tab === "source" && <SourceView />}
+          <div className="tabpanel" role="tabpanel" id="view-panel" aria-labelledby={`tab-${tab}`}>
+            {tab === "overview" && (
+              <div className="scroll">
+                <OverviewView />
+              </div>
+            )}
+            {tab === "flows" && <FlowsView onElement={(el) => (viewEl.current = el)} />}
+            {tab === "arch" && <ArchView onElement={(el) => (viewEl.current = el)} />}
+            {tab === "structure" && <StructureView />}
+            {tab === "diagram" && (
+              <div>
+                <FlowDiagram onElement={(el) => (viewEl.current = el)} />
+              </div>
+            )}
+            {tab === "mindmap" && (
+              <div>
+                <MindMap onElement={(el) => (viewEl.current = el)} />
+              </div>
+            )}
+            {tab === "suggest" && <SuggestionsView />}
+            {tab === "changes" && <ChangesView />}
+            {tab === "notes" && <NotesView />}
+            {tab === "outline" && <OutlineView />}
+            {tab === "source" && <SourceView />}
+          </div>
         </section>
 
         <SidePanel />

@@ -11,6 +11,18 @@ import { useAppStore } from "@/store/app";
 
 const pathD = (c: number[]) => `M${c[0]},${c[1]} C${c[2]},${c[3]} ${c[4]},${c[5]} ${c[6]},${c[7]}`;
 
+/**
+ * Overview node icons arrive as SVG strings from the (static) overview model. They are the only
+ * HTML rendered here, so accept exactly the tiny shape vocabulary the model uses and drop
+ * anything else. This keeps a future data change from turning the diagram into an XSS sink.
+ */
+const SAFE_ICON_RE = /^<svg viewBox="0 0 16 16">(?:<(?:path|circle|ellipse) (?:[a-z]+="[^"<>]*" ?)+\/>)+<\/svg>$/;
+function safeIcon(html: string): string {
+  const s = html || "";
+  if (!SAFE_ICON_RE.test(s) || /\son\w+\s*=|javascript:|href=|<script/i.test(s)) return "";
+  return s;
+}
+
 /** The label shown on a sequence/tree row. */
 const stepLabel = (s: FlowStep): string =>
   s.entry ? s.text : s.toName + (s.ext || s.load || s.reg || s.render ? "" : "()");
@@ -426,6 +438,7 @@ function OverviewBody({ onElement }: { onElement: (el: HTMLElement | null) => vo
             key={n.key}
             tabIndex={0}
             role="button"
+            aria-label={`${n.label}, ${n.tag}`}
             style={
               {
                 left: g.x,
@@ -435,6 +448,14 @@ function OverviewBody({ onElement }: { onElement: (el: HTMLElement | null) => vo
                 "--lc": n.color,
               } as React.CSSProperties
             }
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setOvSel(n.key);
+                setFlowStep(-1);
+                setSide("details");
+              }
+            }}
             onClick={(ev) => {
               if ((ev.target as HTMLElement).closest("button")) return;
               setOvSel(n.key);
@@ -447,7 +468,7 @@ function OverviewBody({ onElement }: { onElement: (el: HTMLElement | null) => vo
             }}
           >
             <div className="ovn-h">
-              <span dangerouslySetInnerHTML={{ __html: n.icon }} />
+              <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: safeIcon(n.icon) }} />
               <b title={n.label}>{n.label}</b>
               {meta ? <span className="meta">{meta}</span> : null}
             </div>
@@ -599,6 +620,9 @@ function SequenceBody({ onElement }: { onElement: (el: HTMLElement | null) => vo
             className="lane file"
             key={p}
             title={`Open ${p}`}
+            role="button"
+            tabIndex={0}
+            aria-label={`Open ${p}`}
             style={
               {
                 left: x,
@@ -607,6 +631,12 @@ function SequenceBody({ onElement }: { onElement: (el: HTMLElement | null) => vo
                 "--lc": c ? KIND_COLOR[c.kind] || "var(--wire)" : "var(--wire)",
               } as React.CSSProperties
             }
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                openFile(p);
+              }
+            }}
             onClick={() => openFile(p)}
           >
             <b>{p.split("/").pop()}</b>
@@ -871,13 +901,16 @@ export function FlowsView({ onElement }: { onElement: (el: HTMLElement | null) =
     const inner = innerRef.current;
     const ro = inner && typeof ResizeObserver !== "undefined" ? new ResizeObserver(run) : null;
     if (inner && ro) ro.observe(inner);
+    let resizeT: number | null = null;
     const onResize = () => {
       last = "";
-      window.setTimeout(run, 120);
+      if (resizeT) window.clearTimeout(resizeT);
+      resizeT = window.setTimeout(run, 120);
     };
     window.addEventListener("resize", onResize);
     return () => {
       ids.forEach((id) => window.clearTimeout(id));
+      if (resizeT) window.clearTimeout(resizeT);
       ro?.disconnect();
       window.removeEventListener("resize", onResize);
     };

@@ -120,6 +120,14 @@ export function resolveImports(files: ProjectFile[]): Edge[] {
   });
   const goMod = files.find((f) => /(^|\/)go\.mod$/.test(f.path));
   const goModule = goMod && (goMod.text.match(/^module\s+(\S+)/m) || [])[1];
+  // First non-test .go file per directory, so resolving an import is a map lookup, not a scan.
+  const goByDir = new Map<string, ProjectFile>();
+  if (goModule)
+    files.forEach((f) => {
+      if (!/\.go$/.test(f.path) || /_test\.go$/.test(f.path)) return;
+      const d = dirOf(f.path);
+      if (!goByDir.has(d)) goByDir.set(d, f);
+    });
   const JSX = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte", ".json", ".d.ts"];
   const tryJs = (base: string): string | null => {
     if (paths.has(base)) return base;
@@ -184,7 +192,7 @@ export function resolveImports(files: ProjectFile[]): Edge[] {
         specs.forEach((s) => {
           if (!s.startsWith(goModule + "/")) return;
           const d = joinPath(dirOf(goMod.path), s.slice(goModule.length + 1));
-          const hit = files.find((x) => dirOf(x.path) === d && /\.go$/.test(x.path) && !/_test\.go$/.test(x.path));
+          const hit = goByDir.get(d);
           if (hit) add(p, hit.path, "import");
         });
       }

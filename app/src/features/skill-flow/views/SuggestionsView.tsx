@@ -91,7 +91,7 @@ export function SuggestionsView() {
           )}
         </div>
         {error ? (
-          <div className="err" style={{ margin: "0 0 10px" }}>
+          <div className="err" role="alert" style={{ margin: "0 0 10px" }}>
             {error}
           </div>
         ) : null}

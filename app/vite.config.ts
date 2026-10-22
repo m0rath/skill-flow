@@ -30,6 +30,23 @@ function cspPlugin(): Plugin {
   };
 }
 
+/**
+ * Group third-party code into stable vendor chunks so app code can be cached
+ * and downloaded independently of the libraries.
+ */
+function manualChunks(id: string): string | undefined {
+  if (!id.includes("node_modules")) return undefined;
+  if (id.includes("jszip")) return "vendor-jszip";
+  if (id.includes("html-to-image")) return "vendor-html-to-image";
+  if (id.includes("motion")) return "vendor-motion";
+  if (id.includes("react-router") || id.includes("@remix-run")) return "vendor-router";
+  if (id.includes("react-dom") || id.includes("scheduler") || /node_modules[\\/]react[\\/]/.test(id)) {
+    return "vendor-react";
+  }
+  if (id.includes("zustand")) return "vendor-zustand";
+  return "vendor";
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), cspPlugin()],
@@ -48,7 +65,13 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
+    target: "es2022",
     sourcemap: false,
-    chunkSizeWarningLimit: 900,
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        manualChunks,
+      },
+    },
   },
 });

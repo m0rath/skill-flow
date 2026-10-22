@@ -335,7 +335,13 @@ export function FlowDiagram({ onElement }: { onElement?: (el: HTMLElement | null
           </button>
         </div>
         <span className="sep" />
-        <button className="ib" type="button" title="Previous step (←)" onClick={() => step(-1)}>
+        <button
+          className="ib"
+          type="button"
+          aria-label="Previous step"
+          title="Previous step (←)"
+          onClick={() => step(-1)}
+        >
           ←
         </button>
         <select
@@ -351,7 +357,7 @@ export function FlowDiagram({ onElement }: { onElement?: (el: HTMLElement | null
             </option>
           ))}
         </select>
-        <button className="ib" type="button" title="Next step (→)" onClick={() => step(1)}>
+        <button className="ib" type="button" aria-label="Next step" title="Next step (→)" onClick={() => step(1)}>
           →
         </button>
         <span className="sep" />

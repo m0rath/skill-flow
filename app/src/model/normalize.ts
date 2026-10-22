@@ -6,17 +6,23 @@ export const index = new Map<string, FlowNode>();
 /** Lookup of every node by its step number (for example "2a.1"). */
 export const numIndex = new Map<string, string>();
 
+type Raw = Record<string, unknown>;
+
+const isRaw = (v: unknown): v is Raw => !!v && typeof v === "object" && !Array.isArray(v);
+const asRaw = (v: unknown): Raw => (isRaw(v) ? v : {});
+const asString = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : v == null ? fallback : String(v));
+
 export function normCreates(list: unknown): Create[] {
-  return arr(list as unknown)
-    .map((c) =>
-      typeof c === "string"
-        ? { name: c, kind: "other", note: "" }
-        : {
-            name: String((c as Create).name ?? (c as { title?: string }).title ?? "output"),
-            kind: String((c as Create).kind ?? "other"),
-            note: (c as Create).note ? String((c as Create).note) : "",
-          },
-    )
+  return arr<unknown>(list)
+    .map((c): Create => {
+      if (typeof c === "string") return { name: c, kind: "other", note: "" };
+      const raw = asRaw(c);
+      return {
+        name: asString(raw.name ?? raw.title, "output"),
+        kind: asString(raw.kind, "other"),
+        note: asString(raw.note),
+      };
+    })
     .filter((c) => c.name.trim());
 }
 
@@ -24,40 +30,44 @@ const KINDS: NodeKind[] = ["step", "decision", "loop", "parallel", "stop"];
 const isKind = (k: string): k is NodeKind => (KINDS as string[]).includes(k);
 
 export function normalize(input: unknown): Model {
-  const m = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+  const m = asRaw(input);
   const out: Model = {
-    title: String(m.title || m.name || "Untitled workflow"),
-    summary: String(m.summary || m.description || ""),
-    trigger: String(m.trigger || ""),
-    inputs: arr(m.inputs as unknown).map(String),
-    notes: arr(m.notes as unknown).map(String),
+    title: asString(m.title || m.name, "Untitled workflow"),
+    summary: asString(m.summary || m.description),
+    trigger: asString(m.trigger),
+    inputs: arr<unknown>(m.inputs).map((x) => asString(x)),
+    notes: arr<unknown>(m.notes).map((x) => asString(x)),
     steps: [],
   };
   // Project-flow fields ride along unchanged so the project views can read them.
-  const comps = arr(m.components).filter((c): c is Record<string, unknown> => !!c && typeof c === "object");
+  const comps = arr<unknown>(m.components).filter(isRaw);
   if (comps.length)
     out.components = comps.map((c) => ({
-      name: String(c.name || "Component"),
-      path: String(c.path || ""),
-      kind: String(c.kind || "library"),
-      purpose: String(c.purpose || ""),
-      depends: arr(c.depends).map(String),
-      keyFiles: arr(c.keyFiles).map(String),
+      name: asString(c.name, "Component"),
+      path: asString(c.path),
+      kind: asString(c.kind, "library"),
+      purpose: asString(c.purpose),
+      depends: arr<unknown>(c.depends).map((x) => asString(x)),
+      keyFiles: arr<unknown>(c.keyFiles).map((x) => asString(x)),
     }));
-  if (arr(m.stack).length) out.stack = arr(m.stack).map(String);
-  const cmds = arr(m.commands).filter((c): c is Record<string, unknown> => !!c && typeof c === "object");
+  if (arr<unknown>(m.stack).length) out.stack = arr<unknown>(m.stack).map((x) => asString(x));
+  const cmds = arr<unknown>(m.commands).filter(isRaw);
   if (cmds.length)
-    out.commands = cmds.map((c) => ({ cmd: String(c.cmd || c.command || ""), purpose: String(c.purpose || "") }));
+    out.commands = cmds.map((c) => ({ cmd: asString(c.cmd || c.command), purpose: asString(c.purpose) }));
   index.clear();
   numIndex.clear();
   let seq = 0;
 
-  function walk(nodes: unknown, prefix: string, parent: string | null): FlowNode[] {
+  // A malformed/hostile reply can nest arbitrarily deep; stop before the stack does.
+  const MAX_DEPTH = 12;
+
+  function walk(nodes: unknown, prefix: string, parent: string | null, depth = 0): FlowNode[] {
+    if (depth > MAX_DEPTH) return [];
     let n = 0;
-    return arr(nodes as unknown)
-      .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
+    return arr<unknown>(nodes)
+      .filter(isRaw)
       .map((raw) => {
-        const rawKind = String(raw.kind || raw.type || "step").toLowerCase();
+        const rawKind = asString(raw.kind || raw.type, "step").toLowerCase();
         const kind: NodeKind = isKind(rawKind)
           ? rawKind
           : rawKind.startsWith("cond") || rawKind.startsWith("branch")
@@ -72,27 +82,27 @@ export function normalize(input: unknown): Model {
           kind,
           num,
           parent,
-          title: String(raw.title || raw.question || raw.name || "Step"),
-          detail: String(raw.detail || raw.description || ""),
+          title: asString(raw.title || raw.question || raw.name, "Step"),
+          detail: asString(raw.detail || raw.description),
           creates: normCreates(raw.creates || raw.outputs),
-          uses: arr(raw.uses || raw.tools).map(String),
-          source: String(raw.source || raw.quote || ""),
+          uses: arr<unknown>(raw.uses || raw.tools).map((x) => asString(x)),
+          source: asString(raw.source || raw.quote),
         };
         index.set(node.id, node);
         numIndex.set(num, node.id);
         if (kind === "decision" || kind === "parallel") {
-          node.question = String(raw.question || raw.title || "");
-          const br = arr(raw.branches).filter((b): b is Record<string, unknown> => !!b && typeof b === "object");
+          node.question = asString(raw.question || raw.title);
+          const br = arr<unknown>(raw.branches).filter(isRaw);
           if (kind === "decision" && br.length === 1) br.push({ label: "Otherwise", steps: [], implied: true });
           node.branches = br.map((b, i): Branch => ({
-            label: String(b.label || b.condition || (kind === "parallel" ? "Track " + (i + 1) : "Case " + (i + 1))),
+            label: asString(b.label || b.condition, kind === "parallel" ? "Track " + (i + 1) : "Case " + (i + 1)),
             implied: !!b.implied,
-            steps: walk(b.steps, num + String.fromCharCode(97 + i), node.id),
+            steps: walk(b.steps, num + String.fromCharCode(97 + i), node.id, depth + 1),
           }));
         }
         if (kind === "loop") {
-          node.over = String(raw.over || raw.repeat || "");
-          node.steps = walk(raw.steps, num, node.id);
+          node.over = asString(raw.over || raw.repeat);
+          node.steps = walk(raw.steps, num, node.id, depth + 1);
         }
         return node;
       });
@@ -100,6 +110,26 @@ export function normalize(input: unknown): Model {
 
   out.steps = walk(m.steps, "", null);
   return out;
+}
+
+/** Every node in document order (pre-order: a node, its branches, then loop bodies). */
+export function flattenNodes(steps: FlowNode[]): FlowNode[] {
+  const out: FlowNode[] = [];
+  (function walk(list: FlowNode[]) {
+    list.forEach((n) => {
+      out.push(n);
+      if (n.branches) n.branches.forEach((b) => walk(b.steps));
+      if (n.steps) walk(n.steps);
+    });
+  })(steps);
+  return out;
+}
+
+/** Step number → node id for one model (independent of the module-level `numIndex`). */
+export function numberIndex(steps: FlowNode[]): Map<string, string> {
+  const map = new Map<string, string>();
+  flattenNodes(steps).forEach((n) => map.set(n.num, n.id));
+  return map;
 }
 
 /** Every node, flattened, in document order. */
@@ -129,8 +159,12 @@ export function allCreates(): CreateEntry[] {
   const map = new Map<string, CreateEntry>();
   ordered().forEach((n) =>
     n.creates.forEach((c) => {
-      if (!map.has(c.name)) map.set(c.name, { name: c.name, kind: c.kind, by: [] });
-      (map.get(c.name) as CreateEntry).by.push(n);
+      let e = map.get(c.name);
+      if (!e) {
+        e = { name: c.name, kind: c.kind, by: [] };
+        map.set(c.name, e);
+      }
+      e.by.push(n);
     }),
   );
   return [...map.values()];

@@ -1,5 +1,5 @@
-import { type ReactNode, useCallback } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { type MouseEvent, type ReactNode, useCallback } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { BrandMark, HomeIcon, ProjectFlowIcon, SkillFlowIcon } from "@/components/Icons";
 import { useAppStore } from "@/store/app";
@@ -14,7 +14,7 @@ const BRAND: Record<AppMode, { title: string; desc: string }> = {
   },
   "project-flow": {
     title: "Project Flow Mapper",
-    desc: "Open a whole project folder: see its architecture, structure and how it runs, then question and fix it.",
+    desc: "Architecture, structure, call flows and runtime.",
   },
 };
 
@@ -29,13 +29,16 @@ export function Header({ mode, actions }: { mode: AppMode; actions?: ReactNode }
   const toggleTheme = useAppStore((s) => s.toggleTheme);
   const brand = BRAND[mode];
 
-  const onBrand = useCallback(() => {
-    if (mode !== "hub" || location.pathname !== "/") {
-      navigate("/");
-      return;
-    }
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [mode, location.pathname, navigate]);
+  const onBrand = useCallback(
+    (e: MouseEvent<HTMLAnchorElement>) => {
+      // Already home: the link would be a no-op, so scroll back to the top instead.
+      if (mode === "hub" && location.pathname === "/") {
+        e.preventDefault();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    },
+    [mode, location.pathname],
+  );
 
   const gotoSection = useCallback(
     (id: string) => {
@@ -52,26 +55,14 @@ export function Header({ mode, actions }: { mode: AppMode; actions?: ReactNode }
 
   return (
     <header className="bar">
-      <div
-        className="brand"
-        role="button"
-        tabIndex={0}
-        title="Back to justools Hub"
-        style={{ cursor: "pointer" }}
-        onClick={onBrand}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onBrand();
-          }
-        }}
-      >
+      <Link to="/" className="brand" title="Back to justools Hub" onClick={onBrand}>
         <BrandMark />
         <div>
-          <h1>{brand.title}</h1>
+          {/* On the hub the hero owns the page <h1>; elsewhere the brand title is it. */}
+          {mode === "hub" ? <p className="brand-title">{brand.title}</p> : <h1>{brand.title}</h1>}
           <p>{brand.desc}</p>
         </div>
-      </div>
+      </Link>
 
       {mode === "hub" && (
         <nav className="hub-nav" aria-label="Sections">
@@ -84,6 +75,7 @@ export function Header({ mode, actions }: { mode: AppMode; actions?: ReactNode }
       )}
 
       <nav className="mode-nav" aria-label="Tool selection">
+        {/* NavLink sets aria-current="page" on the active route. */}
         <NavLink to="/" end className={({ isActive }) => "mode-pill" + (isActive ? " active" : "")}>
           <HomeIcon />
           <span>Hub</span>

@@ -2,7 +2,6 @@
   Project-level analysis ported from the legacy analyser. Everything here is pure:
   it takes files/bins as arguments and returns data, never touching app globals.
 */
-import { esc } from "@/lib/util";
 import {
   compKey,
   ENTRY_RE,
@@ -34,11 +33,11 @@ export const COMP_KINDS = [
   "other",
 ];
 
-/** Parse a JSON string into an object, returning null on failure or non-objects. */
+/** Parse a JSON string into an object, returning null on failure or non-objects/arrays. */
 function parseJson(text: string): Record<string, unknown> | null {
   try {
     const v: unknown = JSON.parse(text);
-    return v !== null && typeof v === "object" ? (v as Record<string, unknown>) : null;
+    return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
   } catch {
     return null;
   }
@@ -46,7 +45,23 @@ function parseJson(text: string): Record<string, unknown> | null {
 
 /** Coerce a dynamic value into a plain object map (empty when it is not one). */
 function asObj(v: unknown): Record<string, unknown> {
-  return v !== null && typeof v === "object" ? (v as Record<string, unknown>) : {};
+  return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+
+/** Line count of a file's text (0 when the text is empty). */
+export function lineCount(text: string): number {
+  return text ? text.split("\n").length : 0;
+}
+
+/**
+ * Return copies of `files` with `lines` filled in. Keeps `analyzeProject` from mutating its
+ * input while still giving the views the cached line counts they render.
+ */
+export function withLineCounts(files: ProjectFile[]): ProjectFile[] {
+  return files.map((f) => {
+    const n = lineCount(f.text);
+    return f.lines === n ? f : { ...f, lines: n };
+  });
 }
 
 export function projectCommands(files: ProjectFile[]): Command[] {
@@ -129,9 +144,11 @@ interface CompAcc {
 export function analyzeProject(files: ProjectFile[], bins: BinFile[], name: string): Project {
   const byLang = new Map<string, LangStat>();
   let lines = 0;
+  // Local counts, never written back onto the caller's file objects.
+  const lineOf = new Map<string, number>();
   files.forEach((f) => {
-    const n = f.text ? f.text.split("\n").length : 0;
-    f.lines = n;
+    const n = lineCount(f.text);
+    lineOf.set(f.path, n);
     lines += n;
     const L = langOf(f.path);
     const cur = byLang.get(L.name) || { name: L.name, color: L.color, lines: 0, files: 0 };
@@ -145,7 +162,7 @@ export function analyzeProject(files: ProjectFile[], bins: BinFile[], name: stri
     const k = compKey(f.path);
     const c = comps.get(k) || { key: k, files: 0, lines: 0, langs: new Map<string, number>(), paths: [] };
     c.files++;
-    const fl = "bin" in f ? 0 : f.lines || 0;
+    const fl = "bin" in f ? 0 : (lineOf.get(f.path) ?? 0);
     c.lines += fl;
     c.paths.push(f.path);
     if (!("bin" in f)) {
@@ -248,9 +265,9 @@ export function analyzeProject(files: ProjectFile[], bins: BinFile[], name: stri
     commands: projectCommands(files),
     stack: projectStack(files),
     big: files
-      .filter((f) => isCode(f.path) && (f.lines || 0) > 800)
-      .sort((a, b) => (b.lines || 0) - (a.lines || 0))
-      .map((f) => ({ path: f.path, lines: f.lines || 0 })),
+      .filter((f) => isCode(f.path) && (lineOf.get(f.path) ?? 0) > 800)
+      .sort((a, b) => (lineOf.get(b.path) ?? 0) - (lineOf.get(a.path) ?? 0))
+      .map((f) => ({ path: f.path, lines: lineOf.get(f.path) ?? 0 })),
   };
   return P;
 }
@@ -332,12 +349,12 @@ export function compStats(
   comp: PComponent,
 ): { files: number; lines: number; langs: string[]; paths: string[]; readme?: string; tests: number } {
   const ps = [...files, ...bins].filter((f) => compOfPath(components, f.path) === comp);
-  const lines = ps.reduce((a, f) => a + ("bin" in f ? 0 : f.lines || 0), 0);
+  const lines = ps.reduce((a, f) => a + ("bin" in f ? 0 : f.lines || lineCount(f.text)), 0);
   const langs = new Map<string, number>();
   ps.forEach((f) => {
     if (!("bin" in f)) {
       const L = langOf(f.path).name;
-      langs.set(L, (langs.get(L) || 0) + (f.lines || 0));
+      langs.set(L, (langs.get(L) || 0) + (f.lines || lineCount(f.text)));
     }
   });
   return {
@@ -366,7 +383,3 @@ export const KIND_COLOR: Record<string, string> = {
   docs: "var(--faint)",
   other: "var(--wire)",
 };
-
-export function kindPill(kind: string): string {
-  return `<span class="kpill k-${esc(kind)}">${esc(kind)}</span>`;
-}

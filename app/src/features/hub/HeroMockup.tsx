@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
+import { tablistKeyDown } from "@/components/a11y";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 
 type MockMode = "skill" | "project";
@@ -55,11 +56,20 @@ export function HeroMockup() {
   return (
     <div className="mockup-window">
       <div className="mockup-header">
-        <div className="mockup-tabs" role="tablist" aria-label="Example tool">
+        <div
+          className="mockup-tabs"
+          role="tablist"
+          aria-label="Example tool"
+          onKeyDown={(e) => tablistKeyDown(e, (id) => pick(id as MockMode))}
+        >
           <button
             type="button"
             role="tab"
+            id="hero-tab-skill"
+            aria-controls="hero-mock-panel"
             aria-selected={mode === "skill"}
+            data-tab-id="skill"
+            tabIndex={mode === "skill" ? 0 : -1}
             className={"m-tab" + (mode === "skill" ? " active" : "")}
             onClick={() => pick("skill")}
           >
@@ -68,7 +78,11 @@ export function HeroMockup() {
           <button
             type="button"
             role="tab"
+            id="hero-tab-project"
+            aria-controls="hero-mock-panel"
             aria-selected={mode === "project"}
+            data-tab-id="project"
+            tabIndex={mode === "project" ? 0 : -1}
             className={"m-tab" + (mode === "project" ? " active" : "")}
             onClick={() => pick("project")}
           >
@@ -77,7 +91,12 @@ export function HeroMockup() {
         </div>
       </div>
 
-      <div className="mockup-steps">
+      <div
+        className="mockup-steps"
+        id="hero-mock-panel"
+        role="tabpanel"
+        aria-labelledby={mode === "skill" ? "hero-tab-skill" : "hero-tab-project"}
+      >
         {d.steps.map((s, i) => {
           const isGapStep = s.gap && !added;
           return (
@@ -86,7 +105,7 @@ export function HeroMockup() {
               className={"m-step" + (isGapStep ? " gap-step" : "")}
               initial={reduce ? false : { opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: reduce ? 0 : i * 0.05 }}
+              transition={reduce ? { duration: 0 } : { duration: 0.3, delay: i * 0.05 }}
             >
               <span className="m-num">{s.num}</span>
               <span className="m-text">{s.gap && added ? d.added : s.text}</span>
@@ -107,7 +126,7 @@ export function HeroMockup() {
             initial={reduce ? false : { opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={reduce ? undefined : { opacity: 0, y: -6 }}
-            transition={{ duration: 0.2 }}
+            transition={reduce ? { duration: 0 } : { duration: 0.2 }}
           >
             {resolved === "accepted" ? (
               <p className="m-ai-msg" style={{ color: "var(--make, #3A7419)", fontWeight: 600, margin: 0 }}>

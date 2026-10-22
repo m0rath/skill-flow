@@ -87,6 +87,7 @@ export function mapErr(status: number, msg: string, extra: string): ErrorCode {
     msg.includes("credit balance")
   )
     return "quota";
+  if (status === 402) return "quota";
   if (
     status === 401 ||
     status === 403 ||
@@ -138,7 +139,9 @@ interface StreamState {
 type ParsedEvent = Record<string, unknown>;
 
 async function readSSE(res: Response, onData: (d: ParsedEvent) => void): Promise<void> {
-  const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+  const body = res.body;
+  if (!body) return;
+  const reader = body.getReader();
   const dec = new TextDecoder();
   let buf = "";
   const flush = (ev: string) => {
@@ -156,19 +159,24 @@ async function readSSE(res: Response, onData: (d: ParsedEvent) => void): Promise
     }
     onData(d);
   };
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) {
-      if (buf.trim()) flush(buf);
-      break;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        if (buf.trim()) flush(buf);
+        break;
+      }
+      buf += dec.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+      let i: number;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const ev = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        flush(ev);
+      }
     }
-    buf += dec.decode(value, { stream: true }).replace(/\r\n/g, "\n");
-    let i: number;
-    while ((i = buf.indexOf("\n\n")) >= 0) {
-      const ev = buf.slice(0, i);
-      buf = buf.slice(i + 2);
-      flush(ev);
-    }
+  } finally {
+    // Release the stream lock on abort/error too, so the connection can be torn down.
+    reader.releaseLock();
   }
 }
 
@@ -279,15 +287,16 @@ const RETRY_DELAYS = [1000, 3000, 8000];
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject({ code: "cancelled" });
-    const t = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(t);
-        reject({ code: "cancelled" });
-      },
-      { once: true },
-    );
+    function onAbort() {
+      clearTimeout(timer);
+      reject({ code: "cancelled" });
+    }
+    const timer = setTimeout(() => {
+      // Drop the listener on the normal path so repeated retries against one signal don't pile up.
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 

@@ -1,10 +1,9 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 
-import { kindPill } from "@/project/analyze";
 import { traceFlow } from "@/project/flows";
 import { useSkillStore } from "@/features/skill-flow/store";
 
-function FileList({ title, list, empty }: { title: string; list: string[]; empty: string }) {
+function FileListImpl({ title, list, empty }: { title: string; list: string[]; empty: string }) {
   const openFile = useSkillStore((s) => s.openPath);
   return (
     <div className="ov-card">
@@ -28,6 +27,8 @@ function FileList({ title, list, empty }: { title: string; list: string[]; empty
     </div>
   );
 }
+
+const FileList = memo(FileListImpl);
 
 export function OverviewView() {
   const model = useSkillStore((s) => s.model);
@@ -53,10 +54,13 @@ export function OverviewView() {
     });
   }, [flows, code]);
 
+  const cidList = useMemo(() => (project ? [...new Set([...project.ci, ...project.docker])] : []), [project]);
+
   if (!project) return null;
   const P = project;
   const totalL = P.langs.reduce((a, l) => a + l.lines, 0) || 1;
   const cmds = (model.commands || []).slice(0, 12);
+  const comps = model.components || [];
 
   const readme = P.readmes[0];
 
@@ -118,7 +122,7 @@ export function OverviewView() {
           {flows.length ? (
             <ul className="ov-flows">
               {flows.map((f, i) => (
-                <li key={i}>
+                <li key={f.id}>
                   <button
                     type="button"
                     className="linkbtn"
@@ -208,10 +212,10 @@ export function OverviewView() {
 
         <div className="ov-card">
           <h4>
-            Components <span className="badge n">{(model.components || []).length}</span>
+            Components <span className="badge n">{comps.length}</span>
           </h4>
           <ul className="ov-comps">
-            {(model.components || []).map((c) => (
+            {comps.map((c) => (
               <li key={c.name}>
                 <button
                   type="button"
@@ -224,11 +228,11 @@ export function OverviewView() {
                 >
                   {c.name}
                 </button>{" "}
-                <span dangerouslySetInnerHTML={{ __html: kindPill(c.kind) }} />
+                <span className={`kpill k-${c.kind}`}>{c.kind}</span>
                 <span>{c.purpose}</span>
               </li>
             ))}
-            {!(model.components || []).length && <li className="empty">No components found yet.</li>}
+            {!comps.length && <li className="empty">No components found yet.</li>}
           </ul>
         </div>
 
@@ -236,11 +240,7 @@ export function OverviewView() {
         <FileList title="Entry points" list={P.entries} empty="No obvious entry point found." />
         <FileList title="Manifests and build files" list={P.manifests} empty="No manifest found." />
         <FileList title="Docs" list={P.docs} empty="No other docs." />
-        <FileList
-          title="CI/CD and deployment"
-          list={[...P.ci, ...P.docker].filter((x, i, a) => a.indexOf(x) === i)}
-          empty="No CI or deployment files."
-        />
+        <FileList title="CI/CD and deployment" list={cidList} empty="No CI or deployment files." />
         <FileList title="Tests" list={P.tests} empty="No tests found." />
 
         {P.todos.length > 0 && (

@@ -3,7 +3,7 @@ import { useEffect, useMemo } from "react";
 import { useSkillStore } from "@/features/skill-flow/store";
 import { useViewport } from "@/features/skill-flow/viewport";
 import { archGraph, layoutArch } from "@/project/arch";
-import { KIND_COLOR, kindPill } from "@/project/analyze";
+import { KIND_COLOR } from "@/project/analyze";
 
 export function ArchView({ onElement }: { onElement: (el: HTMLElement | null) => void }) {
   const project = useSkillStore((s) => s.project);
@@ -118,6 +118,7 @@ export function ArchView({ onElement }: { onElement: (el: HTMLElement | null) =>
                 key={c.node.id}
                 role="button"
                 tabIndex={0}
+                aria-label={`${c.node.title}${c.node.meta ? ", " + c.node.meta : ""}`}
                 style={
                   {
                     left: c.x,
@@ -127,6 +128,13 @@ export function ArchView({ onElement }: { onElement: (el: HTMLElement | null) =>
                     "--kc": KIND_COLOR[c.node.kind] || "var(--wire)",
                   } as React.CSSProperties
                 }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    select(c.node.id);
+                    setSide("details");
+                  }
+                }}
                 onClick={() => {
                   select(c.node.id);
                   setSide("details");
@@ -137,7 +145,7 @@ export function ArchView({ onElement }: { onElement: (el: HTMLElement | null) =>
               >
                 <div className="ac-top">
                   {archLevel === "components" ? (
-                    <span dangerouslySetInnerHTML={{ __html: kindPill(c.node.kind) }} />
+                    <span className={`kpill k-${c.node.kind}`}>{c.node.kind}</span>
                   ) : (
                     <span className={`kpill k-${c.node.kind}`}>{c.node.pill}</span>
                   )}

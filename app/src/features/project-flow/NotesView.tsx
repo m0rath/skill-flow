@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 
 import { offerDownload } from "@/features/skill-flow/files";
-import { useSkillStore } from "@/features/skill-flow/store";
+import { useSkillStore, type ProjectNote } from "@/features/skill-flow/store";
 import { useAppStore } from "@/store/app";
 
 function notesText(notes: { file: string; text: string; status: string }[]): string {
@@ -11,11 +11,8 @@ function notesText(notes: { file: string; text: string; status: string }[]): str
 export function NotesView() {
   const notes = useSkillStore((s) => s.notes);
   const addNote = useSkillStore((s) => s.addNote);
-  const toggleNote = useSkillStore((s) => s.toggleNote);
-  const removeNote = useSkillStore((s) => s.removeNote);
   const files = useSkillStore((s) => s.files);
   const model = useSkillStore((s) => s.model);
-  const openPath = useSkillStore((s) => s.openPath);
   const setSide = useSkillStore((s) => s.setSide);
   const setChatScope = useSkillStore((s) => s.setChatScope);
   const sendChat = useSkillStore((s) => s.sendChat);
@@ -121,15 +118,7 @@ export function NotesView() {
       {open.length ? (
         <div className="notecards">
           {open.map((n) => (
-            <NoteCard
-              n={n}
-              key={n.id}
-              fileName={n.file}
-              text={n.text}
-              onToggle={() => toggleNote(n.id)}
-              onDelete={() => removeNote(n.id)}
-              onGo={() => openPath(n.file)}
-            />
+            <NoteCard n={n} key={n.id} />
           ))}
         </div>
       ) : (
@@ -143,15 +132,7 @@ export function NotesView() {
           </h3>
           <div className="notecards">
             {done.map((n) => (
-              <NoteCard
-                n={n}
-                key={n.id}
-                fileName={n.file}
-                text={n.text}
-                onToggle={() => toggleNote(n.id)}
-                onDelete={() => removeNote(n.id)}
-                onGo={() => openPath(n.file)}
-              />
+              <NoteCard n={n} key={n.id} />
             ))}
           </div>
         </>
@@ -160,34 +141,30 @@ export function NotesView() {
   );
 }
 
-function NoteCard({
-  n,
-  fileName,
-  text,
-  onToggle,
-  onDelete,
-  onGo,
-}: {
-  n: { id: string; status: string };
-  fileName: string;
-  text: string;
-  onToggle: () => void;
-  onDelete: () => void;
-  onGo: () => void;
-}) {
+function NoteCardImpl({ n }: { n: ProjectNote }) {
+  const toggleNote = useSkillStore((s) => s.toggleNote);
+  const removeNote = useSkillStore((s) => s.removeNote);
+  const openPath = useSkillStore((s) => s.openPath);
   const [confirm, setConfirm] = useState(false);
+  const confirmT = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (confirmT.current) window.clearTimeout(confirmT.current);
+    },
+    [],
+  );
   return (
     <div className={`ncard${n.status !== "open" ? " resolved" : ""}`}>
       <div className="nhead">
         <span className="ntype note">Note</span>
-        <span className="nmeta">{fileName}</span>
+        <span className="nmeta">{n.file}</span>
       </div>
-      <div className="ntext">{text}</div>
+      <div className="ntext">{n.text}</div>
       <div className="acts">
-        <button className="btn sm" type="button" onClick={onGo}>
+        <button className="btn sm" type="button" onClick={() => openPath(n.file)}>
           Go to file
         </button>
-        <button className="btn sm" type="button" onClick={onToggle}>
+        <button className="btn sm" type="button" onClick={() => toggleNote(n.id)}>
           {n.status === "open" ? "Resolve" : "Reopen"}
         </button>
         <button
@@ -196,10 +173,11 @@ function NoteCard({
           onClick={() => {
             if (!confirm) {
               setConfirm(true);
-              window.setTimeout(() => setConfirm(false), 3000);
+              if (confirmT.current) window.clearTimeout(confirmT.current);
+              confirmT.current = window.setTimeout(() => setConfirm(false), 3000);
               return;
             }
-            onDelete();
+            removeNote(n.id);
           }}
         >
           {confirm ? "Click again to delete" : "Delete"}
@@ -208,3 +186,5 @@ function NoteCard({
     </div>
   );
 }
+
+const NoteCard = memo(NoteCardImpl);

@@ -24,7 +24,11 @@ const cells = (line: string) =>
 
 /** Split Markdown into renderable blocks, each remembering the source line range (needed by read-with-me). */
 export function parseMdBlocks(text: string): MdBlock[] {
-  const lines = String(text || "").split("\n");
+  // Normalise CRLF / lone CR and drop a BOM so heading, fence and table regexes match.
+  const lines = String(text ?? "")
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n");
   const out: MdBlock[] = [];
   let i = 0;
 

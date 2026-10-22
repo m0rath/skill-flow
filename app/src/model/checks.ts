@@ -1,6 +1,6 @@
 import { INPUT_DIR } from "./quick-parse";
-import { ordered } from "./normalize";
-import type { FileItem, Model, Suggestion } from "./types";
+import { flattenNodes } from "./normalize";
+import type { FileItem, FlowNode, Model, Suggestion } from "./types";
 
 export interface ChecksInput {
   files: FileItem[];
@@ -15,10 +15,33 @@ export function allText(files: FileItem[]): string {
   return files.map((f) => f.text).join("\n");
 }
 
-/** Deterministic gaps that need no API key. */
+/**
+ * The deterministic local checks, minus dismissed ids. This is expensive (it scans every file's
+ * text and the whole node index) and several views ask for it during the same render, so the
+ * result is cached against the identity of the `files` array and `model` object. Both are replaced
+ * immutably whenever their contents change, so identity is a safe cache key.
+ */
+let checksCache: { files: FileItem[]; model: Model; out: Suggestion[] } | null = null;
+
 export function localChecks({ files, model, dismissed }: ChecksInput): Suggestion[] {
+  let base: Suggestion[];
+  if (checksCache && checksCache.files === files && checksCache.model === model) {
+    base = checksCache.out;
+  } else {
+    base = computeLocalChecks(files, model);
+    checksCache = { files, model, out: base };
+  }
+  if (!dismissed.length) return base.slice();
+  const gone = new Set(dismissed);
+  return base.filter((s) => !gone.has(s.id));
+}
+
+function computeLocalChecks(files: FileItem[], model: Model): Suggestion[] {
   const out: Suggestion[] = [];
-  ordered().forEach((n) => {
+  // Read the model's own tree, not the module-level index: that index belongs to whichever
+  // tool normalised most recently, so it can hold the other mapper's nodes.
+  const nodes: FlowNode[] = flattenNodes(model.steps);
+  nodes.forEach((n) => {
     if (n.branches && n.kind === "decision") {
       const implied = n.branches.filter((b) => b.implied);
       if (implied.length) {
@@ -50,7 +73,7 @@ export function localChecks({ files, model, dismissed }: ChecksInput): Suggestio
       const kw = (inp.match(/[A-Za-z]{4,}/g) || []).filter((w) => !/optional|export|from|with|file/i.test(w))[0] || "";
       const handled =
         kw &&
-        ordered().some(
+        nodes.some(
           (n) =>
             n.kind === "decision" &&
             (n.question + " " + (n.branches || []).map((b) => b.label).join(" ") + " " + n.source)
@@ -88,7 +111,7 @@ export function localChecks({ files, model, dismissed }: ChecksInput): Suggestio
     const have = files.map((f) => f.path).join("\n");
     const listed = (files.find((f) => f.virtual) || { text: "" }).text;
     const refs = new Set<string>();
-    ordered().forEach((n) =>
+    nodes.forEach((n) =>
       n.uses.forEach((u) => {
         if (INPUT_DIR.test(u)) refs.add(u);
       }),
@@ -106,7 +129,7 @@ export function localChecks({ files, model, dismissed }: ChecksInput): Suggestio
         });
     });
   }
-  return out.filter((s) => !dismissed.includes(s.id));
+  return out;
 }
 
 /** Node ids that should show the "!" marker. */

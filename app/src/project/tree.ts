@@ -3,10 +3,16 @@ import type { BinFile, ProjectFile, TreeNode } from "@/project/types";
 /** Build the nested folder tree used by the Structure tab. */
 export function buildTree(files: ProjectFile[], bins: BinFile[]): TreeNode {
   const root: TreeNode = { name: "", path: "", dirs: new Map(), files: [] };
+  const seen = new Set<string>();
   const all: { path: string; f?: ProjectFile; b?: BinFile }[] = [
     ...files.map((f) => ({ path: f.path, f })),
     ...bins.map((b) => ({ path: b.path, b })),
-  ];
+  ].filter((x) => {
+    // Duplicate paths (e.g. the same file dropped twice) would double the counts and break React keys.
+    if (seen.has(x.path)) return false;
+    seen.add(x.path);
+    return true;
+  });
   all.forEach((x) => {
     const parts = x.path.split("/");
     let node = root;
@@ -19,7 +25,8 @@ export function buildTree(files: ProjectFile[], bins: BinFile[]): TreeNode {
   });
   const count = (n: TreeNode) => {
     n.count = n.files.length;
-    n.lines = n.files.reduce((a, x) => a + (x.f?.lines || 0), 0);
+    // Files loaded before `analyzeProject` ran may not have `lines` yet; derive it from the text.
+    n.lines = n.files.reduce((a, x) => a + (x.f?.lines || (x.f?.text ? x.f.text.split("\n").length : 0)), 0);
     n.dirs.forEach((d) => {
       count(d);
       n.count = (n.count || 0) + (d.count || 0);

@@ -33,6 +33,7 @@ interface AppState {
 }
 
 let toastId = 0;
+const toastTimers = new Map<number, number>();
 
 export const useAppStore = create<AppState>((set, get) => ({
   theme: readTheme(),
@@ -55,9 +56,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   toast: (text) => {
     const id = ++toastId;
     set((s) => ({ toasts: [...s.toasts, { id, text }] }));
-    window.setTimeout(() => get().dismissToast(id), 2800);
+    // Remember the timer so dismissing early cancels it instead of firing again later.
+    toastTimers.set(
+      id,
+      window.setTimeout(() => {
+        toastTimers.delete(id);
+        get().dismissToast(id);
+      }, 2800),
+    );
   },
-  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  dismissToast: (id) => {
+    const timer = toastTimers.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      toastTimers.delete(id);
+    }
+    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+  },
   gitModal: { open: false, tool: "project-flow" },
   openGitModal: (tool) => set({ gitModal: { open: true, tool } }),
   closeGitModal: () => set((s) => ({ gitModal: { ...s.gitModal, open: false } })),

@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 
 import { index } from "@/model/normalize";
 import { allCreates } from "@/model/normalize";
 import { md } from "@/lib/markdown";
 import type { Edit, EditResult, FlowNode } from "@/model/types";
 import { useSkillStore, type ChatMsg } from "@/features/skill-flow/store";
-import { compStats, kindPill } from "@/project/analyze";
+import { compStats } from "@/project/analyze";
 import { ovFn } from "@/project/overview";
 import { useAIStore } from "@/store/ai";
 import { FileIcon } from "@/components/Icons";
+import { tablistKeyDown } from "@/components/a11y";
 
 const KIND_NAME: Record<string, string> = {
   step: "Step",
@@ -254,7 +255,7 @@ function DiffBlock({ results, edits }: { results: EditResult[]; edits: Edit[] })
   );
 }
 
-function MsgView({ m, i }: { m: ChatMsg; i: number }) {
+function MsgViewImpl({ m, i }: { m: ChatMsg; i: number }) {
   const applyMsg = useSkillStore((s) => s.applyMsg);
   const discardMsg = useSkillStore((s) => s.discardMsg);
   const undoMsg = useSkillStore((s) => s.undoMsg);
@@ -340,6 +341,11 @@ function MsgView({ m, i }: { m: ChatMsg; i: number }) {
   );
 }
 
+const MsgView = memo(MsgViewImpl);
+
+/** Chat is append-only, so rendering the newest N keeps long sessions responsive. */
+const CHAT_RENDER_LIMIT = 80;
+
 function Chat() {
   const chat = useSkillStore((s) => s.chat);
   const side = useSkillStore((s) => s.side);
@@ -381,7 +387,7 @@ function Chat() {
           </button>
         )}
       </div>
-      <div className="msgs" ref={msgsRef}>
+      <div className="msgs" ref={msgsRef} role="log" aria-live="polite" aria-label="Chat with AI">
         {client ? (
           <div className="msg tip">
             Select a step in the diagram to talk about it, or keep &quot;Whole workflow&quot;. Ask questions, or say
@@ -396,9 +402,15 @@ function Chat() {
             </button>
           </div>
         )}
-        {chat.map((m, i) => (
-          <MsgView m={m} i={i} key={i} />
-        ))}
+        {chat.length > CHAT_RENDER_LIMIT && (
+          <div className="msg tip">
+            Showing the most recent {CHAT_RENDER_LIMIT} messages. Older ones stay saved in this project session.
+          </div>
+        )}
+        {chat.slice(Math.max(0, chat.length - CHAT_RENDER_LIMIT)).map((m, k) => {
+          const i = Math.max(0, chat.length - CHAT_RENDER_LIMIT) + k;
+          return <MsgView m={m} i={i} key={i} />;
+        })}
       </div>
       {client ? (
         <div className="quick">
@@ -411,6 +423,7 @@ function Chat() {
       ) : null}
       <div className="composer">
         <textarea
+          aria-label="Chat message"
           placeholder="Ask about the flow, or say what to fix. Example: add a step to validate the ticket ID"
           value={chatDraft}
           disabled={!client}
@@ -676,7 +689,7 @@ function ProjectDetails() {
       return (
         <section className="sec detail" aria-live="polite">
           <div className="kindline">
-            <span dangerouslySetInnerHTML={{ __html: kindPill(comp.kind) }} />
+            <span className={`kpill k-${comp.kind}`}>{comp.kind}</span>
             <span className="kind" style={{ color: "var(--muted)" }}>
               {st.files} file{st.files === 1 ? "" : "s"} · {st.lines.toLocaleString()} lines
             </span>
@@ -775,12 +788,21 @@ export function SidePanel() {
 
   return (
     <aside className="panel side">
-      <div className="tabs" role="tablist">
+      <div
+        className="tabs"
+        role="tablist"
+        aria-label="Panel views"
+        onKeyDown={(e) => tablistKeyDown(e, (id) => setSide(id as "details" | "chat"))}
+      >
         <button
           className="tab"
           role="tab"
           type="button"
+          id="side-tab-details"
+          data-tab-id="details"
+          aria-controls="side-panel-details"
           aria-selected={side === "details"}
+          tabIndex={side === "details" ? 0 : -1}
           onClick={() => setSide("details")}
         >
           Details
@@ -789,16 +811,32 @@ export function SidePanel() {
           className="tab"
           role="tab"
           type="button"
+          id="side-tab-chat"
+          data-tab-id="chat"
+          aria-controls="side-panel-chat"
           aria-selected={side === "chat"}
+          tabIndex={side === "chat" ? 0 : -1}
           onClick={() => setSide("chat")}
         >
           Chat with AI <span className="badge n">{unread ? "new" : ""}</span>
         </button>
       </div>
-      <div className="side-body" hidden={side !== "details"}>
+      <div
+        className="side-body"
+        id="side-panel-details"
+        role="tabpanel"
+        aria-labelledby="side-tab-details"
+        hidden={side !== "details"}
+      >
         {appMode === "project" ? <ProjectDetails /> : <Details />}
       </div>
-      <div className="side-body" hidden={side !== "chat"}>
+      <div
+        className="side-body"
+        id="side-panel-chat"
+        role="tabpanel"
+        aria-labelledby="side-tab-chat"
+        hidden={side !== "chat"}
+      >
         <Chat />
       </div>
     </aside>

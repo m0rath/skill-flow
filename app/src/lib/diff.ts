@@ -37,9 +37,9 @@ export function diffLines(oldText: string, newText: string): DiffOp[] {
 }
 
 function splitLines(text: string): string[] {
-  const s = String(text ?? "");
+  const s = String(text ?? "").replace(/^\uFEFF/, "");
   if (!s) return [];
-  const lines = s.split(/\r?\n/);
+  const lines = s.split(/\r\n|\r|\n/);
   if (lines[lines.length - 1] === "") lines.pop();
   return lines;
 }

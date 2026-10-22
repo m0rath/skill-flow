@@ -47,8 +47,20 @@ export function useViewport(opts: { max?: number; min?: number } = {}) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     inner.classList.add("anim");
     if (animT.current) window.clearTimeout(animT.current);
-    animT.current = window.setTimeout(() => inner.classList.remove("anim"), 300);
+    animT.current = window.setTimeout(() => {
+      inner.classList.remove("anim");
+      animT.current = null;
+    }, 300);
   }, []);
+
+  // Clear a pending transition class timer if the view unmounts mid-animation.
+  useEffect(
+    () => () => {
+      if (animT.current) window.clearTimeout(animT.current);
+      animT.current = null;
+    },
+    [],
+  );
 
   const zoomTo = useCallback(
     (k: number, cx: number, cy: number) => {
@@ -218,6 +230,18 @@ export function useViewport(opts: { max?: number; min?: number } = {}) {
       vp.removeEventListener("pointerup", end);
       vp.removeEventListener("pointercancel", end);
       vp.removeEventListener("wheel", onWheel);
+      // Unmounting mid-drag must not leave pointer capture or the grabbing cursor behind.
+      pointers.forEach((_, id) => {
+        try {
+          if (vp.hasPointerCapture(id)) vp.releasePointerCapture(id);
+        } catch {
+          /* the pointer is already gone */
+        }
+      });
+      pointers.clear();
+      drag = null;
+      pinch = null;
+      vp.classList.remove("grabbing");
     };
   }, [apply, zoomTo]);
 

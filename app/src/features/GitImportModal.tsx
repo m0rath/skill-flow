@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
+import { useDialog } from "@/components/a11y";
 import { useSkillStore } from "@/features/skill-flow/store";
+import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { importProjectFromGitHub, importSkillFromGitHub, parseGitHubUrl } from "@/lib/github";
 import { useAppStore } from "@/store/app";
 
@@ -17,6 +19,9 @@ export function GitImportModal() {
   const [note, setNote] = useState("");
   const [percent, setPercent] = useState(0);
   const [error, setError] = useState("");
+  const reduce = usePrefersReducedMotion();
+  // Escape and backdrop dismissal are disabled while an import is running.
+  const dialogRef = useDialog(gitModal.open, closeGitModal, { closeOnEscape: !busy });
 
   useEffect(() => {
     if (gitModal.open) {
@@ -28,7 +33,6 @@ export function GitImportModal() {
     }
   }, [gitModal.open]);
 
-  if (!gitModal.open) return null;
   const tool = gitModal.tool;
   const isProject = tool === "project-flow";
 
@@ -63,70 +67,88 @@ export function GitImportModal() {
 
   return (
     <AnimatePresence>
-      <motion.div
-        className="modal"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.15 }}
-        onClick={(e) => e.target === e.currentTarget && !busy && closeGitModal()}
-      >
+      {gitModal.open && (
         <motion.div
-          className="box"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="gitTitle"
-          initial={{ opacity: 0, y: 10, scale: 0.99 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 8, scale: 0.99 }}
-          transition={{ duration: 0.18, ease: "easeOut" }}
+          className="modal"
+          initial={reduce ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={reduce ? { duration: 0 } : { duration: 0.15 }}
+          onClick={(e) => e.target === e.currentTarget && !busy && closeGitModal()}
         >
-          <strong id="gitTitle">Import from GitHub</strong>
-          <p className="empty" style={{ margin: 0 }}>
-            {isProject
-              ? "Paste a public repository URL. The most relevant source files are fetched and mapped."
-              : "Paste a public repository URL. The main Markdown or SKILL.md file is fetched."}
-          </p>
-          <input
-            type="text"
-            autoFocus
-            placeholder="https://github.com/owner/repo"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void run()}
-            style={{
-              height: 32,
-              border: "1px solid var(--line)",
-              borderRadius: 6,
-              background: "var(--surface-2)",
-              padding: "0 10px",
-            }}
-            disabled={busy}
-          />
-          {busy && (
-            <div>
-              <div className="msgline" style={{ fontSize: 13, minHeight: "1.2em" }}>
-                {note || "Fetching…"}
+          <motion.div
+            ref={dialogRef}
+            className="box"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gitTitle"
+            aria-busy={busy}
+            tabIndex={-1}
+            initial={reduce ? false : { opacity: 0, y: 10, scale: 0.99 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.99 }}
+            transition={reduce ? { duration: 0 } : { duration: 0.18, ease: "easeOut" }}
+          >
+            <strong id="gitTitle">Import from GitHub</strong>
+            <p className="empty" style={{ margin: 0 }}>
+              {isProject
+                ? "Paste a public repository URL. The most relevant source files are fetched and mapped."
+                : "Paste a public repository URL. The main Markdown or SKILL.md file is fetched."}
+            </p>
+            <label className="sr-only" htmlFor="gitUrl">
+              Public GitHub repository URL
+            </label>
+            <input
+              id="gitUrl"
+              type="text"
+              data-autofocus
+              placeholder="https://github.com/owner/repo"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void run()}
+              style={{
+                height: 32,
+                border: "1px solid var(--line)",
+                borderRadius: 6,
+                background: "var(--surface-2)",
+                padding: "0 10px",
+              }}
+              disabled={busy}
+            />
+            {busy && (
+              <div>
+                <div className="msgline" role="status" aria-live="polite" style={{ fontSize: 13, minHeight: "1.2em" }}>
+                  {note || "Fetching…"}
+                </div>
+                <div
+                  className="bar"
+                  role="progressbar"
+                  aria-label="Import progress"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={percent}
+                  style={{ height: 4, background: "var(--surface-2)", borderRadius: 2, overflow: "hidden" }}
+                >
+                  <i style={{ display: "block", height: "100%", width: `${percent}%`, background: "var(--pink)" }} />
+                </div>
               </div>
-              <div
-                className="bar"
-                style={{ height: 4, background: "var(--surface-2)", borderRadius: 2, overflow: "hidden" }}
-              >
-                <i style={{ display: "block", height: "100%", width: `${percent}%`, background: "var(--pink)" }} />
+            )}
+            {error && (
+              <div className="err" role="alert">
+                {error}
               </div>
+            )}
+            <div className="row">
+              <button className="btn" type="button" onClick={closeGitModal} disabled={busy}>
+                Cancel
+              </button>
+              <button className="btn primary" type="button" onClick={() => void run()} disabled={busy || !url.trim()}>
+                {busy ? "Importing…" : "Import"}
+              </button>
             </div>
-          )}
-          {error && <div className="err">{error}</div>}
-          <div className="row">
-            <button className="btn" type="button" onClick={closeGitModal} disabled={busy}>
-              Cancel
-            </button>
-            <button className="btn primary" type="button" onClick={() => void run()} disabled={busy || !url.trim()}>
-              {busy ? "Importing…" : "Import"}
-            </button>
-          </div>
+          </motion.div>
         </motion.div>
-      </motion.div>
+      )}
     </AnimatePresence>
   );
 }

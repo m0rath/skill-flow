@@ -92,9 +92,14 @@ export function fpVerb(s: FlowStep): string {
 export function buildOverview(model: { components?: PComponent[] }, flow: Flow, steps: FlowStep[]): OvModel {
   const real = steps.filter((s) => !s.phase);
   const files: string[] = [];
+  const fileSeen = new Set<string>();
   real.forEach((s) =>
     [s.from, s.to].forEach((p) => {
-      if (p !== "actor" && !String(p).startsWith("ext:") && !files.includes(p)) files.push(p);
+      const k = String(p);
+      if (p !== "actor" && !k.startsWith("ext:") && !fileSeen.has(k)) {
+        fileSeen.add(k);
+        files.push(p);
+      }
     }),
   );
   const keyAt = (f: string, lv: string): string => {
@@ -111,9 +116,13 @@ export function buildOverview(model: { components?: PComponent[] }, flow: Flow, 
   const level = levels[li];
   const fileKey = new Map<string, string>();
   const order: string[] = [];
+  const orderSeen = new Set<string>();
   files.forEach((f) => {
     const k = keyAt(f, level);
-    if (!order.includes(k)) order.push(k);
+    if (!orderSeen.has(k)) {
+      orderSeen.add(k);
+      order.push(k);
+    }
   });
   const keep = new Set(order.slice(0, 9));
   files.forEach((f) => {
@@ -323,8 +332,8 @@ export function layoutOverview(flow: Flow, model: OvModel): OvLayout {
       if (list) list.push(n);
       else cols.set(n.rank, [n]);
     });
-  const nCols = Math.max(...cols.keys()) + 1;
-  const maxRows = Math.max(...[...cols.values()].map((c) => c.length));
+  const nCols = cols.size ? Math.max(...cols.keys()) + 1 : 1;
+  const maxRows = cols.size ? Math.max(...[...cols.values()].map((c) => c.length)) : 1;
   const W = Math.max(720, 60 + nCols * NW + (nCols - 1) * CG);
 
   // journey strip (chips rendered by the view from this data)
@@ -390,12 +399,11 @@ export function layoutOverview(flow: Flow, model: OvModel): OvLayout {
       x2 = B.x + B.w / 2 - 14;
     return [x1, A.y + A.h, x1, low, x2, low, x2, B.y + B.h + 3];
   };
-  model.edges.forEach((e) => {
-    e.c = curve(e);
-  });
+  // Copy each edge with its curve: the overview model belongs to the store and must not be mutated.
+  const curved = model.edges.map((e) => ({ ...e, c: curve(e) }));
   const H = bottom + 60 + back * 22 + 30;
   const orderNum = new Map<number, number>(
-    [...model.edges].sort((a, b) => a.first - b.first).map((e, k) => [e.id, k + 1] as [number, number]),
+    [...curved].sort((a, b) => a.first - b.first).map((e, k) => [e.id, k + 1] as [number, number]),
   );
-  return { W, H, geo, edges: model.edges, orderNum, journey: { actor, codes, outs, resp }, back };
+  return { W, H, geo, edges: curved, orderNum, journey: { actor, codes, outs, resp }, back };
 }

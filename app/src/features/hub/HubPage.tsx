@@ -143,18 +143,10 @@ export function HubPage() {
             <Reveal key={tool.id} delay={i * 0.05}>
               <div
                 className="tool-banner-card"
-                role="button"
-                tabIndex={0}
-                title={`Open ${tool.title}`}
                 style={i ? { marginTop: 24 } : undefined}
                 onClick={(e) => {
+                  // Pointer convenience: the accessible path is the real Open button below.
                   if ((e.target as HTMLElement).closest(".demo-link, .tool-link-btn")) return;
-                  navigate(tool.route);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter" && e.key !== " ") return;
-                  if ((e.target as HTMLElement).closest(".demo-link, .tool-link-btn")) return;
-                  e.preventDefault();
                   navigate(tool.route);
                 }}
               >
@@ -288,9 +280,9 @@ export function HubPage() {
 
         {/* 6. Footer */}
         <footer className="landing-footer">
-          <span className="footer-brand" style={{ cursor: "pointer" }} onClick={() => window.scrollTo({ top: 0 })}>
+          <button type="button" className="footer-brand" onClick={() => window.scrollTo({ top: 0 })}>
             justools.in
-          </span>
+          </button>
           <span className="footer-tagline">AI drafts. Humans decide.</span>
         </footer>
       </section>

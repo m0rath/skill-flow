@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSkillStore } from "@/features/skill-flow/store";
 import { compOfPath } from "@/project/analyze";
@@ -6,20 +6,20 @@ import { isCI, isManifest, isReadme, isTestPath, langOf } from "@/project/paths"
 import { buildTree, buildTreeDirs } from "@/project/tree";
 import type { TreeNode } from "@/project/types";
 
-function Row({ x, depth }: { x: TreeNode["files"][number]; depth: number }) {
+function RowImpl({ x, depth }: { x: TreeNode["files"][number]; depth: number }) {
   const sel = useSkillStore((s) => s.sel);
   const select = useSkillStore((s) => s.select);
   const setSide = useSkillStore((s) => s.setSide);
   const openPath = useSkillStore((s) => s.openPath);
-  const entries = useSkillStore((s) => s.project?.entries || []);
+  const entries = useSkillStore((s) => s.project?.entries);
   const notes = useSkillStore((s) => s.notes);
-  const todos = useSkillStore((s) => s.project?.todos || []);
+  const todos = useSkillStore((s) => s.project?.todos);
   const p = x.path;
   const L = langOf(p);
   const name = p.split("/").pop() || p;
   const flags = [
     isReadme(p) ? "README" : "",
-    entries.includes(p) ? "entry" : "",
+    entries?.includes(p) ? "entry" : "",
     isManifest(p) ? "manifest" : "",
     isTestPath(p) ? "test" : "",
     isCI(p) ? "CI" : "",
@@ -27,18 +27,26 @@ function Row({ x, depth }: { x: TreeNode["files"][number]; depth: number }) {
     x.f?.created ? "new" : "",
   ].filter(Boolean);
   const noteN = notes.filter((n) => n.status === "open" && n.file === p).length;
-  const todoN = todos.find((t) => t.path === p)?.n || 0;
+  const todoN = todos?.find((t) => t.path === p)?.n || 0;
+  const open = (dbl = false) => {
+    select("f:" + p);
+    setSide("details");
+    if (dbl) openPath(p);
+  };
   return (
     <div
       className={`tr f${sel === "f:" + p ? " sel" : ""}`}
       style={{ "--d": depth } as React.CSSProperties}
       role="treeitem"
       tabIndex={0}
-      onClick={(e) => {
-        select("f:" + p);
-        setSide("details");
-        if (e.detail >= 2) openPath(p);
+      aria-selected={sel === "f:" + p}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          open();
+        }
       }}
+      onClick={(e) => open(e.detail >= 2)}
     >
       <span className="ldot" style={{ background: x.b ? "var(--line)" : L.color }} />
       <span className={`tn${x.b ? " bin" : ""}`}>{name}</span>
@@ -58,16 +66,18 @@ function Row({ x, depth }: { x: TreeNode["files"][number]; depth: number }) {
   );
 }
 
-function Dir({ d, depth, q }: { d: TreeNode; depth: number; q: string }) {
+const Row = memo(RowImpl);
+
+function DirImpl({ d, depth, q }: { d: TreeNode; depth: number; q: string }) {
   const treeOpen = useSkillStore((s) => s.treeOpen);
   const toggleTreeDir = useSkillStore((s) => s.toggleTreeDir);
-  const components = useSkillStore((s) => s.model.components || []);
+  const components = useSkillStore((s) => s.model.components);
   const match = (p: string) => !q || p.toLowerCase().includes(q);
   const dirHas = (n: TreeNode): boolean =>
     !q || n.files.some((x) => match(x.path)) || [...n.dirs.values()].some(dirHas);
   if (!dirHas(d)) return null;
   const open = !!q || treeOpen.includes(d.path) || depth === 0;
-  const c = compOfPath(components, d.path + "/x");
+  const c = compOfPath(components ?? [], d.path + "/x");
   return (
     <>
       {depth > 0 && (
@@ -76,7 +86,14 @@ function Dir({ d, depth, q }: { d: TreeNode; depth: number; q: string }) {
           style={{ "--d": depth - 1 } as React.CSSProperties}
           role="treeitem"
           aria-expanded={open}
+          data-dir-path={d.path}
           tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              toggleTreeDir(d.path);
+            }
+          }}
           onClick={() => toggleTreeDir(d.path)}
         >
           <span className="caret">{open ? "▾" : "▸"}</span>
@@ -106,6 +123,8 @@ function Dir({ d, depth, q }: { d: TreeNode; depth: number; q: string }) {
   );
 }
 
+const Dir = memo(DirImpl);
+
 export function StructureView() {
   const files = useSkillStore((s) => s.files);
   const bins = useSkillStore((s) => s.bins);
@@ -113,9 +132,52 @@ export function StructureView() {
   const treeFilter = useSkillStore((s) => s.treeFilter);
   const setTreeFilter = useSkillStore((s) => s.setTreeFilter);
   const setTreeOpen = useSkillStore((s) => s.setTreeOpen);
+  const toggleTreeDir = useSkillStore((s) => s.toggleTreeDir);
+
+  // Keystrokes stay in local state so typing is instant; the (potentially large)
+  // tree re-filter is debounced into the store.
+  const [filterDraft, setFilterDraft] = useState(treeFilter);
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (debounce.current) clearTimeout(debounce.current);
+    debounce.current = setTimeout(() => setTreeFilter(filterDraft), 150);
+    return () => {
+      if (debounce.current) clearTimeout(debounce.current);
+    };
+  }, [filterDraft, setTreeFilter]);
 
   const root = useMemo(() => buildTree(files, bins), [files, bins]);
   if (!project) return null;
+
+  // Arrow keys move between visible rows; Left/Right collapse or expand a folder.
+  const onTreeKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const nav = e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End";
+    const toggle = e.key === "ArrowRight" || e.key === "ArrowLeft";
+    if (!nav && !toggle) return;
+    const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="treeitem"]'));
+    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const i = active ? items.indexOf(active) : -1;
+    if (i < 0) return;
+    if (nav) {
+      e.preventDefault();
+      const next =
+        e.key === "Home"
+          ? 0
+          : e.key === "End"
+            ? items.length - 1
+            : e.key === "ArrowDown"
+              ? Math.min(items.length - 1, i + 1)
+              : Math.max(0, i - 1);
+      items[next]?.focus();
+      return;
+    }
+    const expanded = active?.getAttribute("aria-expanded");
+    const path = active?.dataset.dirPath;
+    if (!path || expanded === null) return;
+    e.preventDefault();
+    if (e.key === "ArrowRight" && expanded === "false") toggleTreeDir(path);
+    else if (e.key === "ArrowLeft" && expanded === "true") toggleTreeDir(path);
+  };
 
   return (
     <div id="view-structure" className="scroll">
@@ -124,8 +186,8 @@ export function StructureView() {
           type="search"
           placeholder="Filter files by name or path"
           aria-label="Filter files"
-          value={treeFilter}
-          onChange={(e) => setTreeFilter(e.target.value)}
+          value={filterDraft}
+          onChange={(e) => setFilterDraft(e.target.value)}
         />
         <button className="btn sm" type="button" onClick={() => setTreeOpen(buildTreeDirs(files, bins))}>
           Expand all
@@ -138,7 +200,7 @@ export function StructureView() {
           README{project.readmes.length === 1 ? "" : "s"} · {project.tests.length} test files
         </span>
       </div>
-      <div role="tree">
+      <div role="tree" aria-label="Project file tree" onKeyDown={onTreeKey}>
         {treeFilter ? <Dir d={root} depth={0} q={treeFilter.trim().toLowerCase()} /> : <Dir d={root} depth={0} q="" />}
         {root.count === 0 && <p className="empty">No files match.</p>}
       </div>

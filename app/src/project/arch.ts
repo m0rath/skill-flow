@@ -1,4 +1,4 @@
-import { compDeps, compOfPath, compStats } from "@/project/analyze";
+import { compDeps, compOfPath } from "@/project/analyze";
 import { isTestPath } from "@/project/paths";
 import type { ArchLevel } from "@/features/skill-flow/store";
 import type { BinFile, CodeIndex, PComponent, Project, ProjectFile } from "@/project/types";
@@ -52,7 +52,8 @@ export function archGraph(
         deg.set(e.to, (deg.get(e.to) || 0) + 1);
       }
     });
-    let paths = Object.keys(code.P).filter((p) => !isTestPath(p) && (deg.get(p) || project.entries.includes(p)));
+    const entrySet = new Set(project.entries);
+    let paths = Object.keys(code.P).filter((p) => !isTestPath(p) && (deg.get(p) || entrySet.has(p)));
     let cut = false;
     if (paths.length > 90) {
       cut = true;
@@ -64,20 +65,21 @@ export function archGraph(
       const bn = p.split("/").pop() || p;
       baseCount.set(bn, (baseCount.get(bn) || 0) + 1);
     });
+    const fileByPath = new Map(files.map((x) => [x.path, x]));
     return {
       nodes: paths.map((p) => {
         const c = compOfPath(components, p);
         const fnN = code.P[p].syms.filter((s) => s.kind !== "class").length;
-        const f = files.find((x) => x.path === p);
+        const f = fileByPath.get(p);
         const base = p.split("/").pop() || p;
         return {
           id: "f:" + p,
           title: (baseCount.get(base) || 0) > 1 ? p.split("/").slice(-2).join("/") : base,
           kind: c ? c.kind : "other",
           pill: c ? c.name : "file",
-          purpose: `${fnN} function${fnN === 1 ? "" : "s"} · ${(f?.lines || 0).toLocaleString()} lines${
-            project.entries.includes(p) ? " · entry point" : ""
-          }`,
+          purpose: `${fnN} function${fnN === 1 ? "" : "s"} · ${(
+            f?.lines || (f?.text ? f.text.split("\n").length : 0)
+          ).toLocaleString()} lines${entrySet.has(p) ? " · entry point" : ""}`,
           path: p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "project root",
           meta: "",
         };
@@ -87,12 +89,17 @@ export function archGraph(
     };
   }
   const comps = components;
-  const deps = compDeps(comps, project).filter(
-    (d) => comps.some((c) => c.name === d.from) && comps.some((c) => c.name === d.to),
-  );
+  const names = new Set(comps.map((c) => c.name));
+  const deps = compDeps(comps, project).filter((d) => names.has(d.from) && names.has(d.to));
+  // Count files per component in one pass instead of rescanning every file for every component.
+  const fileCount = new Map<string, number>();
+  [...files, ...bins].forEach((f) => {
+    const c = compOfPath(comps, f.path);
+    if (c) fileCount.set(c.name, (fileCount.get(c.name) || 0) + 1);
+  });
   return {
     nodes: comps.map((c) => {
-      const st = compStats(components, files, bins, c);
+      const n = fileCount.get(c.name) || 0;
       return {
         id: "c:" + c.name,
         title: c.name,
@@ -100,7 +107,7 @@ export function archGraph(
         pill: c.kind,
         purpose: c.purpose,
         path: c.path || "root",
-        meta: `${st.files} file${st.files === 1 ? "" : "s"}`,
+        meta: `${n} file${n === 1 ? "" : "s"}`,
       };
     }),
     edges: deps.map((d) => ({ from: "c:" + d.from, to: "c:" + d.to, n: d.n })),
@@ -171,12 +178,20 @@ export function layoutArch(graph: ArchGraph, level: ArchLevel): ArchLayout {
   const maxPerRow = level === "files" ? 7 : 6;
   const pos = new Map<string, { x: number; y: number; sub: number }>();
 
+  // Group incoming edges once; the row sort below would otherwise rescan every edge per node.
+  const incoming = new Map<string, ArchGraphEdge[]>();
+  graph.edges.forEach((e) => {
+    const list = incoming.get(e.to);
+    if (list) list.push(e);
+    else incoming.set(e.to, [e]);
+  });
+
   const rowsF = rows.filter(Boolean);
   rowsF.forEach((row, ri) => {
     if (ri > 0)
       row.sort((a, b) => {
         const bc = (n: ArchGraphNode) => {
-          const ps = graph.edges.filter((d) => d.to === n.id && pos.has(d.from)).map((d) => pos.get(d.from)?.x || 0);
+          const ps = (incoming.get(n.id) || []).filter((d) => pos.has(d.from)).map((d) => pos.get(d.from)?.x || 0);
           return ps.length ? ps.reduce((x, y) => x + y, 0) / ps.length : 0;
         };
         return bc(a) - bc(b);

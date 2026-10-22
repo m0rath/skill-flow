@@ -14,7 +14,12 @@ function OutlineList({ nodes }: { nodes: FlowNode[] }) {
                 role="button"
                 tabIndex={0}
                 onClick={() => goTo(n.id, "diagram")}
-                onKeyDown={(e) => e.key === "Enter" && goTo(n.id, "diagram")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    goTo(n.id, "diagram");
+                  }
+                }}
               >
                 {n.num} {n.kind === "parallel" ? "In parallel" : "Decide"}: {n.question || n.title}
               </span>
@@ -40,7 +45,12 @@ function OutlineList({ nodes }: { nodes: FlowNode[] }) {
                 role="button"
                 tabIndex={0}
                 onClick={() => goTo(n.id, "diagram")}
-                onKeyDown={(e) => e.key === "Enter" && goTo(n.id, "diagram")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    goTo(n.id, "diagram");
+                  }
+                }}
               >
                 {n.num} Repeat: {n.title}
               </span>
@@ -55,7 +65,12 @@ function OutlineList({ nodes }: { nodes: FlowNode[] }) {
               role="button"
               tabIndex={0}
               onClick={() => goTo(n.id, "diagram")}
-              onKeyDown={(e) => e.key === "Enter" && goTo(n.id, "diagram")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  goTo(n.id, "diagram");
+                }
+              }}
             >
               {n.num} {n.title}
             </span>

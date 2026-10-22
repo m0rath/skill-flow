@@ -126,7 +126,7 @@ function ReadBar({ rwm, onClose }: { rwm: UseReadWithMe; onClose: () => void }) 
         </div>
       </div>
       {showLog && (
-        <div className="rc-log" ref={logRef}>
+        <div className="rc-log" ref={logRef} role="log" aria-live="polite" aria-label="Reading transcript">
           {rwm.log.length ? (
             rwm.log.map((e) => (
               <div className={`e ${e.who}`} key={e.id}>
@@ -294,7 +294,7 @@ export function SourceView() {
 
       <div className="scroll">
         {mode === "read" ? (
-          <MarkdownRead blocks={blocks} speakingRange={speakingRange} onSelect={(text) => setSelection(text)} />
+          <MarkdownRead blocks={blocks} speakingRange={speakingRange} onSelect={setSelection} />
         ) : editing ? (
           <textarea
             aria-label="Edit file"

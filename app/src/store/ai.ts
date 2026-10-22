@@ -33,6 +33,23 @@ function readStore<T>(fn: () => T, fallback: T): T {
   }
 }
 
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+
+/** Only accept keys/ids that are real provider names, never prototype members like "constructor". */
+const isProviderId = (v: unknown): v is ProviderId =>
+  typeof v === "string" && Object.prototype.hasOwnProperty.call(PROVIDERS, v);
+
+/** Coerce a stored value into a map of known provider → string, dropping anything else. */
+function stringMap(v: unknown): ProviderKeys {
+  const out: ProviderKeys = {};
+  if (!isObj(v)) return out;
+  Object.keys(v).forEach((k) => {
+    const value = v[k];
+    if (isProviderId(k) && typeof value === "string" && value) out[k] = value;
+  });
+  return out;
+}
+
 function loadInitial(): { provider: ProviderId; keys: ProviderKeys; models: ProviderKeys; remember: boolean } {
   const out = {
     provider: "anthropic" as ProviderId,
@@ -41,22 +58,24 @@ function loadInitial(): { provider: ProviderId; keys: ProviderKeys; models: Prov
     remember: false,
   };
   try {
-    const s = JSON.parse(localStorage.getItem(AI_KEY) || "{}") as {
-      provider?: ProviderId;
-      models?: ProviderKeys;
-      keys?: ProviderKeys;
-    };
-    if (s.provider && PROVIDERS[s.provider]) out.provider = s.provider;
-    out.models = s.models || {};
-    out.remember = !!(s.keys && Object.keys(s.keys).length);
-    out.keys = s.keys || JSON.parse(sessionStorage.getItem(KEYS_KEY) || "{}");
-    const old = JSON.parse(localStorage.getItem(LEGACY_KEY) || "null") as { key?: string; model?: string } | null;
+    const raw = readStore(() => JSON.parse(localStorage.getItem(AI_KEY) || "{}") as unknown, null);
+    const s = isObj(raw) ? raw : {};
+    if (isProviderId(s.provider)) out.provider = s.provider;
+    out.models = stringMap(s.models);
+    const storedKeys = stringMap(s.keys);
+    out.remember = Object.keys(storedKeys).length > 0;
+    const sessionKeys = stringMap(
+      readStore(() => JSON.parse(sessionStorage.getItem(KEYS_KEY) || "{}") as unknown, null),
+    );
+    out.keys = Object.keys(storedKeys).length ? storedKeys : sessionKeys;
+    const oldRaw = readStore(() => JSON.parse(localStorage.getItem(LEGACY_KEY) || "null") as unknown, null);
+    const old = isObj(oldRaw) ? oldRaw : null;
     if (old && !s.provider) {
-      if (old.key) {
+      if (typeof old.key === "string" && old.key) {
         out.keys.anthropic = old.key;
         out.remember = true;
       }
-      if (old.model) out.models.anthropic = old.model;
+      if (typeof old.model === "string" && old.model) out.models.anthropic = old.model;
       localStorage.removeItem(LEGACY_KEY);
     }
   } catch {
@@ -66,8 +85,8 @@ function loadInitial(): { provider: ProviderId; keys: ProviderKeys; models: Prov
 }
 
 function clientFor(provider: ProviderId, keys: ProviderKeys, models: ProviderKeys): Client | null {
-  const key = keys[provider] || "";
-  const model = models[provider] || "";
+  const key = (keys[provider] || "").trim();
+  const model = (models[provider] || "").trim();
   if (!key || !model) return null;
   return createClient({ provider, key, model });
 }
