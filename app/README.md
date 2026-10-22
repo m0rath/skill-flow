@@ -77,9 +77,11 @@ Keys are never bundled or committed. The Content-Security-Policy in `vite.config
 
 ## Deployment
 
-`npm run build` emits a static SPA into `app/dist/`. Host it on any static host (Netlify / Cloudflare Pages / S3+CDN) with a single-page fallback to `index.html`:
+`npm run build` emits a static SPA into `dist/`. CI (`.github/workflows/ci.yml`) checks both the legacy reference app and this package; `.github/workflows/deploy-netlify.yml` builds `app/` and publishes `app/dist/` to Netlify on every push to `main`, after the checks pass.
 
-- `public/_redirects` provides the SPA fallback and legacy-URL handling.
-- `public/_headers` sets security headers (CSP, `frame-ancestors`, `nosniff`, `Referrer-Policy`, …).
+For any other static host, publish `dist/` with a single-page fallback to `index.html`:
+
+- Vite copies `public/_redirects` and `public/_headers` into `dist/`; they provide the SPA fallback, legacy-URL handling and security headers (CSP, `frame-ancestors`, `nosniff`, `Referrer-Policy`, …).
 - The `justools-csp` Vite plugin injects a matching `<meta http-equiv="Content-Security-Policy">` into the production `index.html`. **Keep its host list in sync with `public/_headers`.**
 - Fonts are self-hosted under `public/assets/fonts/` and loaded via `public/assets/css/fonts.css`.
+- Analytics: `public/assets/js/analytics.js` is a GA4 placeholder that does nothing unless the deploy workflow writes a measurement ID into it.

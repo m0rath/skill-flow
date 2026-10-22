@@ -1,4 +1,5 @@
-# Publishes public/ to Netlify production on every push to main, after the checks pass.
+# Builds the React app in app/ and publishes app/dist to Netlify production on every push to main,
+# after the checks pass.
 # Needs the NETLIFY_AUTH_TOKEN secret and the NETLIFY_SITE_ID variable (Settings → Secrets and variables → Actions).
 # Turn off Netlify's own Git builds so each commit deploys only once.
 name: Deploy to Netlify
@@ -28,6 +29,13 @@ jobs:
       url: https://justools.in
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
       # The Google Analytics ID lives in the Netlify project's environment variables, not in git.
       # Netlify doesn't build this site, so the value is fetched from the Netlify API and written into the file.
       # Without it (or if the lookup fails) the site deploys without analytics.
@@ -44,7 +52,7 @@ jobs:
               jq -r '[.values[] | select(.context == "production" or .context == "all")] | sort_by(.context != "production") | .[0].value // empty') || true
           fi
           if [[ "$id" =~ ^G-[A-Z0-9]+$ ]]; then
-            sed -i "s/__GA_MEASUREMENT_ID__/$id/" public/assets/js/analytics.js
+            sed -i "s/__GA_MEASUREMENT_ID__/$id/" app/public/assets/js/analytics.js
             echo "Google Analytics enabled ($id)."
           else
             echo "::warning::GA_MEASUREMENT_ID isn't set in Netlify (or isn't a G-XXXX ID). Deploying without analytics."
@@ -57,9 +65,9 @@ jobs:
           NETLIFY_DEPLOY_TO_PROD: true
           # The action passes the message through a shell, so it only uses the commit hash, never commit text.
           NETLIFY_DEPLOY_MESSAGE: "main@${{ github.sha }}"
-          build_directory: public
-          # The site is static: nothing to install or build.
-          install_command: "true"
-          build_command: "true"
+          build_directory: app/dist
+          # The action runs each command with a plain shell, so avoid `cd ... && ...`.
+          install_command: "npm ci --prefix app"
+          build_command: "npm run build --prefix app"
       - name: Summary
         run: echo "Deployed to ${NETLIFY_LIVE_URL:-https://justools.in}" >> "$GITHUB_STEP_SUMMARY"

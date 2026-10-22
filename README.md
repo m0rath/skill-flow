@@ -1,5 +1,7 @@
 # Skill Flow Mapper
 
+> **React app:** the production site lives in [`app/`](app/README.md) (Vite + React). The original vanilla implementation in `public/` is kept as a read-only reference; this document describes it.
+
 Upload a Claude skill (`SKILL.md`, or a zipped skill folder) or any Markdown playbook and see the whole workflow at once:
 
 - **Diagram**: every step in order, decision points with one lane per outcome, loops, and the files each step creates. You can pan, zoom, collapse branches and step through with ← / →.
@@ -16,7 +18,7 @@ The page opens with an example skill (a pull request review). Each of its steps 
 
 ![Skill Flow Mapper showing the example PR review skill as a diagram, with the decision step selected](docs/screenshot.png)
 
-The app is fully static: HTML, CSS and native ES modules, plus a vendored copy of JSZip and self-hosted fonts. There is no build step and no backend. Everything in `public/` is the site.
+The original app is fully static: HTML, CSS and native ES modules, plus a vendored copy of JSZip and self-hosted fonts. It has no build step and no backend; `public/` is the legacy site. The production React app is in [`app/`](app/README.md) and is built with `npm run build`.
 
 ## Try It Online
 
@@ -37,6 +39,15 @@ npm start
 ```
 
 ES modules don't load from `file://`, so serve the folder instead of opening `index.html` directly. Any static server works, for example `python3 -m http.server -d public 8000`.
+
+For the production React app:
+
+```bash
+cd app
+npm install
+npm run dev
+# then open http://localhost:5173
+```
 
 ## Development
 
@@ -74,8 +85,8 @@ public/                    the deployable site (publish this folder)
 tests/                     unit tests for model/, lib/ and ai/ helpers
 docs/                      README images
 scripts/serve.js           zero-dependency dev server
-.github/workflows/         CI (lint, format, test) and Netlify deploy
-netlify.toml               Netlify config (publish public/, no build)
+.github/workflows/         CI (legacy + app lint/format/build) and Netlify deploy
+netlify.toml               Netlify config (builds app/, publishes app/dist)
 ```
 
 ## AI features: bring your own key

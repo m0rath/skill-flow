@@ -19,7 +19,22 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+
+      # Original vanilla app in public/, kept as a reference.
       - run: npm ci
       - run: npm run lint
       - run: npm run format:check
       - run: npm test
+
+      # React app in app/ — this is what gets deployed.
+      - run: npm ci
+        working-directory: app
+      - run: npm run lint
+        working-directory: app
+      - run: npm run format:check
+        working-directory: app
+      - run: npm run build
+        working-directory: app

@@ -1,7 +1,9 @@
-# Netlify: static site, no build step. Headers live in public/_headers.
+# Netlify: build the React app in app/ and publish app/dist.
+# Netlify's own Git builds are turned off; the GitHub Actions deploy publishes the same directory.
 [build]
-  publish = "public"
-  command = ""
+  base = "app"
+  publish = "dist"
+  command = "npm ci && npm run build"
 
 [[redirects]]
   from = "/skill-flow-mapper"
