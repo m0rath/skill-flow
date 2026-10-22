@@ -156,6 +156,13 @@ button.hub-nav-link {
   outline: none;
 }
 
+/* Soften the page behind dialogs so the dialog reads as its own layer.
+   The overlay already dims; the blur just adds depth without hiding context. */
+.modal {
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
 /* Desktop header: keep every action on one row. The brand takes the leftover
    space and its subtitle truncates, rather than the action buttons wrapping
    onto a second line (which also pushes the diagram below the fold). */
