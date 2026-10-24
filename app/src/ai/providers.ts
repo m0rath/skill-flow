@@ -62,8 +62,8 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
 
 /** Models offered by the shared demo. Keep this list small: the server allowlists every ID. */
 export const DEMO_MODELS: ModelInfo[] = [
-  { id: "mistral-small-2603", name: "Mistral Small 4" },
   { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite" },
+  { id: "mistral-small-2603", name: "Mistral Small 4" },
 ];
 export const DEFAULT_DEMO_MODEL = DEMO_MODELS[0].id;
 /** The proxy accepts 40–48K-character prompts; leave room for the JSON instruction suffix. */
@@ -101,7 +101,8 @@ export type ErrorCode =
   | "refused"
   | "session_expired"
   | "demo_unavailable"
-  | "demo_limit";
+  | "demo_limit"
+  | "demo_busy";
 
 export interface AIError {
   code: ErrorCode;
@@ -130,6 +131,7 @@ export function mapErr(status: number, msg: string, extra: string): ErrorCode {
   extra = String(extra || "").toLowerCase();
   // The demo proxy sends these codes so the UI can point people at their own key.
   if (extra.includes("demo_unavailable")) return "demo_unavailable";
+  if (extra.includes("demo_busy")) return "demo_busy";
   if (extra.includes("demo_limit")) return "demo_limit";
   if (extra.includes("model_not_found")) return "model_not_found";
   if (extra.includes("network")) return "network";
@@ -588,7 +590,7 @@ export async function listModels(provider: ByoProviderId, key: string): Promise<
 
 export function preferModel(provider: ProviderId, models: ModelInfo[]): ModelInfo | undefined {
   const by = (re: RegExp) => models.find((m) => re.test(m.id));
-  if (provider === "demo") return by(/^mistral-small/i) || models[0] || DEMO_MODELS[0];
+  if (provider === "demo") return by(/^gemini-[\d.]+-flash-lite/i) || by(/^gemini/i) || models[0] || DEMO_MODELS[0];
   if (provider === "anthropic") return by(/sonnet/i) || models[0];
   if (provider === "openai") return by(/^gpt-\d(\.\d+)?$/i) || by(/^gpt-\d/i) || models[0];
   if (provider === "mistral")

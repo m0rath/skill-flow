@@ -18,6 +18,8 @@ const COPY: Partial<Record<ErrorCode, string>> = {
   cancelled: "Stopped.",
   upstream_error: "The AI provider returned an error. Try again.",
   demo_limit: "The demo has reached its limit for now. Use your own API key in AI settings for more.",
+  demo_busy:
+    "This demo model is rate-limited right now. Try the other demo model, or add your own API key in AI settings.",
   demo_unavailable: "The demo isn't available right now. Use your own API key in AI settings.",
 };
 

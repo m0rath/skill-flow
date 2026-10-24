@@ -263,7 +263,11 @@ async function callGemini(key, model, messages, maxTokens, signal) {
 function upstreamFailure(status, text) {
   const lower = String(text || "").toLowerCase();
   if (status === 429) {
-    return new HttpError(429, "rate_limited", "The demo provider is busy right now. Try again in a minute.");
+    return new HttpError(
+      429,
+      "demo_busy",
+      "The demo model is rate-limited right now. Try the other model or use your own key.",
+    );
   }
   if (
     status === 413 ||

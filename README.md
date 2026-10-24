@@ -91,7 +91,7 @@ netlify.toml               Netlify config (builds app/, publishes app/dist)
 
 ## AI features: demo or bring your own key
 
-> **React app:** it defaults to a no-key **Try the demo** option backed by a Netlify Function (Mistral Small 4 or Gemini 3.5 Flash-Lite), also supports Mistral as a BYO provider, and shows a short privacy banner while the demo is active. Configure the server keys as described in [`app/README.md`](app/README.md). The details below describe the legacy vanilla app.
+> **React app:** it defaults to a no-key **Try the demo** option backed by a Netlify Function (Gemini 3.5 Flash-Lite by default, with Mistral Small 4 also available), also supports Mistral as a BYO provider, and shows a short privacy banner while the demo is active. Configure the server keys as described in [`app/README.md`](app/README.md). The details below describe the legacy vanilla app.
 
 Chat, AI mapping and the gap review work with any of three legacy providers. Each user picks one under **AI settings** in the app and adds their own key:
 

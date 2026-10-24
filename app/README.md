@@ -73,14 +73,14 @@ Design tokens (`--paper`, `--surface`, `--ink`, `--muted`, `--line`, `--step`, �
 
 ### Demo AI (no user key)
 
-On first load the app selects **Try the demo**. Requests go to the same-origin `/api/demo` route, which Netlify rewrites to `netlify/functions/demo.mjs`. The function validates the request, applies rate limits, adds the hidden provider key and streams the upstream response back. The browser never receives a provider key.
+On first load the app selects **Try the demo**, with **Gemini 3.5 Flash-Lite** as the default model. Requests go to the same-origin `/api/demo` route, which Netlify rewrites to `netlify/functions/demo.mjs`. The function validates the request, applies rate limits, adds the hidden provider key and streams the upstream response back. The browser never receives a provider key.
 
 Supported demo models:
 
 | Model                   | Label                 | Provider |
 | ----------------------- | --------------------- | -------- |
-| `mistral-small-2603`    | Mistral Small 4       | Mistral  |
 | `gemini-3.5-flash-lite` | Gemini 3.5 Flash-Lite | Google   |
+| `mistral-small-2603`    | Mistral Small 4       | Mistral  |
 
 Set these environment variables in **Netlify → Project configuration → Environment variables** (and locally in `app/.env.local` if you want to test the proxy):
 
@@ -102,7 +102,7 @@ npm run dev
 
 `vite.config.ts` serves the same function at `/api/demo` in development, so the client code is identical in development and production. `npm run preview` serves the built files without that middleware; use `npm run dev` (or `netlify dev`) when testing demo requests.
 
-**Privacy:** demo prompts are sent to Mistral or Google under their free-tier terms and may be used to improve their models. The UI shows a small banner while the demo is selected and recommends bringing your own key for private code. Do not paste secrets into the demo. The function logs only request metadata (provider, model, sizes and latency) — never prompt text. Netlify still records normal request metadata.
+**Privacy:** demo prompts are sent to the selected provider — Google Gemini by default, or Mistral if chosen — under their free-tier terms and may be used to improve their models. The UI shows a small banner while the demo is selected and recommends bringing your own key for private code. Do not paste secrets into the demo. The function logs only request metadata (provider, model, sizes and latency) — never prompt text. Netlify still records normal request metadata.
 
 **Limits** (enforced in `demo.mjs`): 6 requests/minute and 12 requests/day per IP, plus a 500 requests/day global budget. Netlify also applies a 20 requests/day per-IP platform backstop. Counters use Netlify Blobs with strong consistency when available, with an in-memory fallback for local development. Adjust the constants at the top of `demo.mjs` if needed.
 

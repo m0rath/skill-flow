@@ -209,8 +209,8 @@ export function AISettingsModal() {
                 <div className="demo-note" role="note">
                   <span className="demo-chip">No key needed</span>
                   <span>
-                    Shared demo. Prompts go to Mistral or Google and may be used to improve their models. Don't paste
-                    secrets.{" "}
+                    Shared demo. Prompts go to the selected provider (Gemini by default, or Mistral) and may be used to
+                    improve their models. Don't paste secrets.{" "}
                     <button className="linkbtn" type="button" onClick={switchToByo}>
                       Use your own key
                     </button>{" "}

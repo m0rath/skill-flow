@@ -7,8 +7,15 @@ process.env.DEMO_GEMINI_API_KEY = "test-key";
 delete process.env.NETLIFY_BLOBS_CONTEXT;
 
 const upstreamBodies = [];
+let upstreamStatus = 200;
 globalThis.fetch = async (_url, init) => {
   upstreamBodies.push(JSON.parse(init.body));
+  if (upstreamStatus !== 200) {
+    return new Response(
+      JSON.stringify({ object: "error", message: "Rate limit exceeded", type: "rate_limited", code: "1300" }),
+      { status: upstreamStatus, headers: { "content-type": "application/json" } },
+    );
+  }
   const sse = [
     'data: {"choices":[{"delta":{"content":"OK"}}]}',
     "",
@@ -72,4 +79,15 @@ test("demo proxy validates, streams, and rate-limits", async () => {
 
   assert.equal(upstreamBodies[0].max_tokens, 8_000);
   assert.equal(upstreamBodies[0].model, "mistral-small-2603");
+});
+
+test("demo proxy distinguishes an upstream rate limit from its own minute limit", async () => {
+  upstreamStatus = 429;
+  try {
+    const res = await post(BODY, "10.0.0.4");
+    assert.equal(res.status, 429);
+    assert.equal((await res.json()).error.code, "demo_busy");
+  } finally {
+    upstreamStatus = 200;
+  }
 });
