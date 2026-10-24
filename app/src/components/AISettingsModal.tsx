@@ -2,7 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { errCopy } from "@/ai/errors";
-import { PROVIDERS, listModels, preferModel, type ModelInfo, type ProviderId } from "@/ai/providers";
+import {
+  DEFAULT_DEMO_MODEL,
+  DEMO_MODELS,
+  PROVIDERS,
+  demoModelName,
+  listModels,
+  preferModel,
+  type ModelInfo,
+  type ProviderId,
+} from "@/ai/providers";
 import { useDialog } from "@/components/a11y";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { useAIStore, type ProviderKeys } from "@/store/ai";
@@ -41,7 +50,10 @@ export function AISettingsModal() {
       setDraft({ provider, keys: { ...keys }, models: { ...models }, remember });
       setModelList([]);
       setMsg({
-        text: keys[provider] ? "" : "Paste your key, then press Test key to load the models it can use.",
+        text:
+          provider === "demo" || keys[provider]
+            ? ""
+            : "Paste your key, then press Test key to load the models it can use.",
         cls: "",
       });
       setShowKey(false);
@@ -49,10 +61,11 @@ export function AISettingsModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  const isDemo = draft.provider === "demo";
   const info = PROVIDERS[draft.provider];
   const note = useMemo(
     () =>
-      `Chat, AI mapping and gap review call ${info.label} directly from your browser with your own key. The key is sent only to ${info.host}; this site has no server. Get a key at ${info.keySite}.` +
+      `Chat, AI mapping and gap review call ${info.label} directly from your browser with your own key. The key is sent only to ${info.host}; BYO calls do not pass through this site.` +
       (draft.provider === "gemini"
         ? " Gemini has a free tier; on it, Google may use prompts to improve its products, so avoid confidential files."
         : draft.provider === "openai"
@@ -62,7 +75,8 @@ export function AISettingsModal() {
   );
 
   const curKey = draft.keys[draft.provider] || "";
-  const curModel = draft.models[draft.provider] || "";
+  const demoModel = DEMO_MODELS.some((m) => m.id === draft.models.demo) ? draft.models.demo! : DEFAULT_DEMO_MODEL;
+  const curModel = isDemo ? demoModel : draft.models[draft.provider] || "";
 
   const stash = (next: Partial<Draft> = {}): Draft => {
     const merged: Draft = { ...draft, ...next };
@@ -73,6 +87,7 @@ export function AISettingsModal() {
   };
 
   const testKey = async () => {
+    if (draft.provider === "demo") return;
     const key = (draft.keys[draft.provider] || "").trim();
     if (!key) {
       setMsg({ text: "Paste a key first.", cls: "bad" });
@@ -96,6 +111,17 @@ export function AISettingsModal() {
   const close = () => setOpen(false);
 
   const onSave = () => {
+    if (isDemo) {
+      configure({
+        provider: draft.provider,
+        keys: draft.keys,
+        models: { ...draft.models, demo: demoModel },
+        remember: draft.remember,
+      });
+      close();
+      toast(`Using the demo · ${demoModelName(demoModel)}`);
+      return;
+    }
     if (curKey && !curModel) {
       setMsg({ text: "Press Test key to load models, or type a model ID.", cls: "bad" });
       return;
@@ -103,6 +129,17 @@ export function AISettingsModal() {
     configure({ provider: draft.provider, keys: draft.keys, models: draft.models, remember: draft.remember });
     close();
     toast(curKey ? `Using ${info.label}` : "Settings saved");
+  };
+
+  const switchToByo = () => {
+    const nextProvider =
+      (["anthropic", "openai", "gemini", "mistral"] as ProviderId[]).find((p) => draft.keys[p]) || "anthropic";
+    const next = stash({ provider: nextProvider });
+    setModelList([]);
+    setMsg({
+      text: next.keys[nextProvider] ? "" : "Paste your key, then press Test key.",
+      cls: "",
+    });
   };
 
   // While a key check is in flight, do not let a stray backdrop click dismiss the dialog.
@@ -143,113 +180,162 @@ export function AISettingsModal() {
                 id="provSel"
                 value={draft.provider}
                 onChange={(e) => {
-                  const next = stash({ provider: e.target.value as ProviderId });
+                  const nextProvider = e.target.value as ProviderId;
+                  const next = stash({
+                    provider: nextProvider,
+                    models:
+                      nextProvider === "demo" && !draft.models.demo
+                        ? { ...draft.models, demo: DEFAULT_DEMO_MODEL }
+                        : draft.models,
+                  });
                   setModelList([]);
                   setMsg({
-                    text: next.keys[next.provider] ? "" : "Paste your key, then press Test key.",
+                    text:
+                      nextProvider === "demo" || next.keys[nextProvider] ? "" : "Paste your key, then press Test key.",
                     cls: "",
                   });
                 }}
               >
+                <option value="demo">Try the demo (no key)</option>
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="openai">OpenAI (ChatGPT)</option>
                 <option value="gemini">Google Gemini</option>
+                <option value="mistral">Mistral AI</option>
               </select>
             </label>
-            <p className="note">
-              {note}{" "}
-              <a href={info.keyUrl} target="_blank" rel="noopener noreferrer">
-                {info.keySite}
-              </a>
-            </p>
 
-            <label className="f" htmlFor="apiKey">
-              <span>{info.label} API key</span>
-              <span className="inrow">
-                <input
-                  type={showKey ? "text" : "password"}
-                  id="apiKey"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder={info.keyHint}
-                  value={curKey}
-                  onChange={(e) => setDraft((d) => ({ ...d, keys: { ...d.keys, [d.provider]: e.target.value } }))}
-                />
-                <button className="btn sm" type="button" onClick={() => setShowKey((v) => !v)}>
-                  {showKey ? "Hide" : "Show"}
-                </button>
-              </span>
-            </label>
+            {isDemo ? (
+              <>
+                <div className="demo-note" role="note">
+                  <span className="demo-chip">No key needed</span>
+                  <span>
+                    Shared demo. Prompts go to Mistral or Google and may be used to improve their models. Don't paste
+                    secrets.{" "}
+                    <button className="linkbtn" type="button" onClick={switchToByo}>
+                      Use your own key
+                    </button>{" "}
+                    for private code.
+                  </span>
+                </div>
+                <label className="f" htmlFor="modelSel">
+                  Model
+                  <select
+                    id="modelSel"
+                    value={curModel}
+                    onChange={(e) => setDraft((d) => ({ ...d, models: { ...d.models, demo: e.target.value } }))}
+                  >
+                    {DEMO_MODELS.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.id})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="note">A few requests per day. Use your own key for private code and regular work.</p>
+              </>
+            ) : (
+              <>
+                <p className="note">
+                  {note}{" "}
+                  <a href={info.keyUrl} target="_blank" rel="noopener noreferrer">
+                    Get a key at {info.keySite}
+                  </a>
+                  .
+                </p>
 
-            <label className="toggle" style={{ color: "var(--ink)" }}>
-              <input
-                type="checkbox"
-                checked={draft.remember}
-                onChange={(e) => setDraft((d) => ({ ...d, remember: e.target.checked }))}
-              />{" "}
-              Remember keys on this device (stored in this browser's local storage)
-            </label>
+                <label className="f" htmlFor="apiKey">
+                  <span>{info.label} API key</span>
+                  <span className="inrow">
+                    <input
+                      type={showKey ? "text" : "password"}
+                      id="apiKey"
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder={info.keyHint}
+                      value={curKey}
+                      onChange={(e) => setDraft((d) => ({ ...d, keys: { ...d.keys, [d.provider]: e.target.value } }))}
+                    />
+                    <button className="btn sm" type="button" onClick={() => setShowKey((v) => !v)}>
+                      {showKey ? "Hide" : "Show"}
+                    </button>
+                  </span>
+                </label>
 
-            <label className="f" htmlFor="modelSel">
-              Model
-              <span className="inrow">
-                <select
-                  id="modelSel"
-                  value={curModel}
-                  onChange={(e) => setDraft((d) => ({ ...d, models: { ...d.models, [d.provider]: e.target.value } }))}
-                >
-                  {!curModel && <option value="">Test the key to load your models</option>}
-                  {modelList.length
-                    ? modelList.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name === m.id ? m.id : `${m.name} (${m.id})`}
-                        </option>
-                      ))
-                    : curModel && <option value={curModel}>{curModel}</option>}
-                </select>
-                <button className="btn sm" type="button" onClick={testKey} disabled={testing}>
-                  {testing ? "Checking…" : "Test key"}
-                </button>
-              </span>
-            </label>
+                <label className="toggle" style={{ color: "var(--ink)" }}>
+                  <input
+                    type="checkbox"
+                    checked={draft.remember}
+                    onChange={(e) => setDraft((d) => ({ ...d, remember: e.target.checked }))}
+                  />{" "}
+                  Remember keys on this device (stored in this browser's local storage)
+                </label>
 
-            <label className="f" htmlFor="modelCustom">
-              Or type a model ID
-              <input
-                type="text"
-                id="modelCustom"
-                spellCheck={false}
-                autoComplete="off"
-                placeholder="Model ID"
-                value={curModel}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, models: { ...d.models, [d.provider]: e.target.value.trim() } }))
-                }
-              />
-            </label>
+                <label className="f" htmlFor="modelSel">
+                  Model
+                  <span className="inrow">
+                    <select
+                      id="modelSel"
+                      value={curModel}
+                      onChange={(e) =>
+                        setDraft((d) => ({ ...d, models: { ...d.models, [d.provider]: e.target.value } }))
+                      }
+                    >
+                      {!curModel && <option value="">Test the key to load your models</option>}
+                      {modelList.length
+                        ? modelList.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name === m.id ? m.id : `${m.name} (${m.id})`}
+                            </option>
+                          ))
+                        : curModel && <option value={curModel}>{curModel}</option>}
+                    </select>
+                    <button className="btn sm" type="button" onClick={testKey} disabled={testing}>
+                      {testing ? "Checking…" : "Test key"}
+                    </button>
+                  </span>
+                </label>
+
+                <label className="f" htmlFor="modelCustom">
+                  Or type a model ID
+                  <input
+                    type="text"
+                    id="modelCustom"
+                    spellCheck={false}
+                    autoComplete="off"
+                    placeholder="Model ID"
+                    value={curModel}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, models: { ...d.models, [d.provider]: e.target.value.trim() } }))
+                    }
+                  />
+                </label>
+              </>
+            )}
 
             <div className={`msgline ${msg.cls}`} role="status" aria-live="polite">
               {msg.text}
             </div>
 
             <div className="row">
-              <button
-                className="btn"
-                type="button"
-                onClick={() => {
-                  setDraft((d) => ({ ...d, keys: { ...d.keys, [d.provider]: "" } }));
-                  forget(draft.provider);
-                  setMsg({ text: "This key was removed from this browser.", cls: "ok" });
-                }}
-              >
-                Remove this key
-              </button>
+              {!isDemo && (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setDraft((d) => ({ ...d, keys: { ...d.keys, [d.provider]: "" } }));
+                    forget(draft.provider);
+                    setMsg({ text: "This key was removed from this browser.", cls: "ok" });
+                  }}
+                >
+                  Remove this key
+                </button>
+              )}
               <span style={{ flex: 1 }} />
               <button className="btn" type="button" onClick={close}>
                 Cancel
               </button>
               <button className="btn primary" type="button" onClick={onSave}>
-                Save
+                {isDemo ? "Use demo" : "Save"}
               </button>
             </div>
           </motion.div>

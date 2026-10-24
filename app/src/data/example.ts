@@ -119,7 +119,7 @@ export const EXAMPLE_MODEL: unknown = {
       title: "Check the tests",
       question: "Does the PR change behaviour?",
       detail:
-        'The file only says what to do if behaviour changes, not what to do otherwise. Try it: open the Suggestions tab to see this gap, then click "Fix in file" (needs an API key).',
+        'The file only says what to do if behaviour changes, not what to do otherwise. Try it: open the Suggestions tab to see this gap, then click "Fix in file" (uses the demo or your own key).',
       source: "If the PR changes behaviour, confirm there are tests that cover it.",
       branches: [
         {

@@ -81,7 +81,7 @@ function ToolActions() {
       <button
         className="btn keybtn"
         type="button"
-        title="AI provider, API key and model"
+        title="AI provider, key and model"
         onClick={() => setSettingsOpen(true)}
       >
         <span className="kdot" />

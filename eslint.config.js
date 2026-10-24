@@ -2,7 +2,18 @@ import js from "@eslint/js";
 import globals from "globals";
 
 export default [
-  { ignores: ["public/vendor/**", "project-flow-mapper/**", "app/**", "**/vendor/**", "node_modules/**"] },
+  {
+    ignores: [
+      "public/vendor/**",
+      "project-flow-mapper/**",
+      "app/**",
+      ".netlify/**",
+      ".vercel/**",
+      ".wrangler/**",
+      "**/vendor/**",
+      "node_modules/**",
+    ],
+  },
   js.configs.recommended,
   {
     files: ["public/assets/js/**/*.js"],

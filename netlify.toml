@@ -5,42 +5,11 @@
   publish = "dist"
   command = "npm ci && npm run build"
 
-[[redirects]]
-  from = "/skill-flow-mapper"
-  to = "/index.html"
-  status = 200
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
 
-[[redirects]]
-  from = "/skill-flow-mapper/*"
-  to = "/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/project-flow-mapper"
-  to = "/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/project-flow-mapper/*"
-  to = "/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/skill-flow"
-  to = "/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/skill-flow/*"
-  to = "/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/project-flow"
-  to = "/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/project-flow/*"
-  to = "/index.html"
-  status = 200
+# Redirects live in app/public/_redirects (copied to dist). Keep them out of this file:
+# Netlify merges _redirects before netlify.toml, and a duplicate /api/demo rule here
+# would move behind the SPA catch-all, so requests would get index.html instead of the
+# function.

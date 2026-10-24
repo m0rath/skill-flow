@@ -1,3 +1,6 @@
+# Shared demo proxy (Netlify Functions 2.0).
+/api/demo              /.netlify/functions/demo   200!
+
 # SPA fallback: every app route serves the same index.html.
 # Legacy URLs are redirected to the new routes inside the app router.
 /skill-flow-mapper     /index.html   200
