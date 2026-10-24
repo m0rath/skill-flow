@@ -57,6 +57,11 @@ jobs:
           else
             echo "::warning::GA_MEASUREMENT_ID isn't set in Netlify (or isn't a G-XXXX ID). Deploying without analytics."
           fi
+      # The action defaults to an old Netlify CLI that predates Functions 2.0 config.
+      # Install a current, pinned CLI first; the action will use the binary it finds.
+      - name: Install Netlify CLI
+        run: npm install --global netlify-cli@27.14.2
+
       # Pinned to the v2.4.0 commit: this third-party action receives the deploy token.
       - uses: jsmrcaga/action-netlify-deploy@ae36ac1b3d1ad3646eecb5631977e7314d3a6a2f # v2.4.0
         with:
@@ -66,6 +71,9 @@ jobs:
           # The action passes the message through a shell, so never interpolate branch names or commit text.
           NETLIFY_DEPLOY_MESSAGE: "${{ github.event_name == 'workflow_dispatch' && 'manual' || 'main' }}@${{ github.sha }}"
           build_directory: app/dist
+          functions_directory: app/netlify/functions
+          # We already built above; force a fresh function bundle from app/netlify/functions.
+          command_extra_flags: "--no-build --skip-functions-cache"
           # The action runs each command with a plain shell, so avoid `cd ... && ...`.
           install_command: "npm ci --prefix app"
           build_command: "npm run build --prefix app"

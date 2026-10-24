@@ -396,9 +396,9 @@ function Chat() {
           </div>
         ) : (
           <div className="msg tip">
-            Chat needs an API key from Anthropic, OpenAI or Google Gemini.{" "}
+            Chat needs the demo or your own API key.{" "}
             <button className="btn sm primary" type="button" onClick={() => setSettingsOpen(true)}>
-              Add API key
+              Open AI settings
             </button>
           </div>
         )}

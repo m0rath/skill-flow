@@ -1,6 +1,9 @@
 import { parseJsonLoose } from "../lib/json";
 
-export type ProviderId = "anthropic" | "openai" | "gemini";
+export type ProviderId = "demo" | "anthropic" | "openai" | "gemini" | "mistral";
+/** Providers that use a user-supplied API key. The demo is handled separately by the server proxy. */
+export type ByoProviderId = Exclude<ProviderId, "demo">;
+export type DemoUpstream = "mistral" | "gemini";
 
 export interface ProviderInfo {
   label: string;
@@ -9,9 +12,20 @@ export interface ProviderInfo {
   keyUrl: string;
   keySite: string;
   host: string;
+  /** True for the no-key demo backed by the Netlify Function. */
+  demo?: boolean;
 }
 
 export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
+  demo: {
+    label: "Try the demo (no key)",
+    short: "Demo",
+    keyHint: "",
+    keyUrl: "",
+    keySite: "",
+    host: "this site",
+    demo: true,
+  },
   anthropic: {
     label: "Anthropic (Claude)",
     short: "Claude",
@@ -36,7 +50,38 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
     keySite: "aistudio.google.com",
     host: "generativelanguage.googleapis.com",
   },
+  mistral: {
+    label: "Mistral AI",
+    short: "Mistral",
+    keyHint: "your Mistral API key",
+    keyUrl: "https://console.mistral.ai/api-keys/",
+    keySite: "console.mistral.ai",
+    host: "api.mistral.ai",
+  },
 };
+
+/** Models offered by the shared demo. Keep this list small: the server allowlists every ID. */
+export const DEMO_MODELS: ModelInfo[] = [
+  { id: "mistral-small-2603", name: "Mistral Small 4" },
+  { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite" },
+];
+export const DEFAULT_DEMO_MODEL = DEMO_MODELS[0].id;
+/** The proxy accepts 40–48K-character prompts; leave room for the JSON instruction suffix. */
+export const DEMO_MAX_INPUT_CHARS = 60_000;
+/** Streaming functions are killed after 60s, so keep the demo output bounded. */
+export const DEMO_MAX_OUTPUT_TOKENS = 8_000;
+
+export function demoModelName(model: string): string {
+  return DEMO_MODELS.find((m) => m.id === model)?.name || model;
+}
+
+export function demoProviderName(model: string): string {
+  return demoUpstream(model) === "gemini" ? "Google Gemini" : "Mistral";
+}
+
+export function demoUpstream(model: string): DemoUpstream {
+  return model.startsWith("gemini-") ? "gemini" : "mistral";
+}
 
 export type ErrorCode =
   | "quota"
@@ -54,7 +99,9 @@ export type ErrorCode =
   | "empty_completion"
   | "truncated_empty"
   | "refused"
-  | "session_expired";
+  | "session_expired"
+  | "demo_unavailable"
+  | "demo_limit";
 
 export interface AIError {
   code: ErrorCode;
@@ -81,6 +128,12 @@ export interface Client {
 export function mapErr(status: number, msg: string, extra: string): ErrorCode {
   msg = String(msg || "").toLowerCase();
   extra = String(extra || "").toLowerCase();
+  // The demo proxy sends these codes so the UI can point people at their own key.
+  if (extra.includes("demo_unavailable")) return "demo_unavailable";
+  if (extra.includes("demo_limit")) return "demo_limit";
+  if (extra.includes("model_not_found")) return "model_not_found";
+  if (extra.includes("network")) return "network";
+  if (extra.includes("cancelled")) return "cancelled";
   if (
     extra.includes("insufficient_quota") ||
     msg.includes("exceeded your current quota") ||
@@ -205,8 +258,55 @@ interface ReqSpec {
   parse: (d: ParsedEvent, st: StreamState) => string;
 }
 
+function parseAnthropic(d: ParsedEvent, st: StreamState): string {
+  const dd = d as {
+    type?: string;
+    delta?: { type?: string; text?: string; stop_reason?: string };
+    error?: { message?: string; type?: string };
+  };
+  if (dd.type === "content_block_delta" && dd.delta?.type === "text_delta") return dd.delta.text || "";
+  if (dd.type === "message_delta") st.stop = dd.delta?.stop_reason === "max_tokens" ? "len" : st.stop;
+  if (dd.type === "error")
+    throw { code: mapErr(0, dd.error?.message || "", dd.error?.type || ""), message: dd.error?.message };
+  return "";
+}
+
+function parseOpenAI(d: ParsedEvent, st: StreamState): string {
+  const dd = d as {
+    error?: { message?: string; code?: string };
+    choices?: { finish_reason?: string; delta?: { content?: string } }[];
+  };
+  if (dd.error) throw { code: mapErr(0, dd.error.message || "", dd.error.code || ""), message: dd.error.message };
+  const c = dd.choices?.[0];
+  if (c?.finish_reason === "length") st.stop = "len";
+  return c?.delta?.content || "";
+}
+
+function parseGemini(d: ParsedEvent, st: StreamState): string {
+  const dd = d as {
+    error?: { code?: number; message?: string; status?: string };
+    candidates?: { finishReason?: string; content?: { parts?: { thought?: boolean; text?: string }[] } }[];
+    promptFeedback?: { blockReason?: string };
+  };
+  if (dd.error)
+    throw {
+      code: mapErr(dd.error.code || 0, dd.error.message || "", dd.error.status || ""),
+      message: dd.error.message,
+    };
+  const c = dd.candidates?.[0];
+  if (c?.finishReason === "MAX_TOKENS") st.stop = "len";
+  if (dd.promptFeedback?.blockReason) throw { code: "refused" };
+  return (c?.content?.parts || [])
+    .filter((p) => !p.thought && p.text)
+    .map((p) => p.text)
+    .join("");
+}
+
+/** Mistral's chat endpoint is OpenAI-compatible, including its SSE chunks. */
+const parseMistral = parseOpenAI;
+
 const REQ: Record<
-  ProviderId,
+  ByoProviderId,
   (key: string, model: string, messages: Turn[], maxTokens: number, alt?: boolean) => ReqSpec
 > = {
   anthropic: (key, model, messages, maxTokens) => ({
@@ -218,18 +318,7 @@ const REQ: Record<
       "anthropic-dangerous-direct-browser-access": "true",
     },
     body: { model, max_tokens: maxTokens, messages, stream: true },
-    parse: (d, st) => {
-      const dd = d as {
-        type?: string;
-        delta?: { type?: string; text?: string; stop_reason?: string };
-        error?: { message?: string; type?: string };
-      };
-      if (dd.type === "content_block_delta" && dd.delta?.type === "text_delta") return dd.delta.text || "";
-      if (dd.type === "message_delta") st.stop = dd.delta?.stop_reason === "max_tokens" ? "len" : st.stop;
-      if (dd.type === "error")
-        throw { code: mapErr(0, dd.error?.message || "", dd.error?.type || ""), message: dd.error?.message };
-      return "";
-    },
+    parse: parseAnthropic,
   }),
   openai: (key, model, messages, maxTokens, alt) => ({
     url: "https://api.openai.com/v1/chat/completions",
@@ -238,16 +327,7 @@ const REQ: Record<
       { model, messages, stream: true },
       alt ? { max_tokens: maxTokens } : { max_completion_tokens: maxTokens },
     ),
-    parse: (d, st) => {
-      const dd = d as {
-        error?: { message?: string; code?: string };
-        choices?: { finish_reason?: string; delta?: { content?: string } }[];
-      };
-      if (dd.error) throw { code: mapErr(0, dd.error.message || "", dd.error.code || ""), message: dd.error.message };
-      const c = dd.choices?.[0];
-      if (c?.finish_reason === "length") st.stop = "len";
-      return c?.delta?.content || "";
-    },
+    parse: parseOpenAI,
   }),
   gemini: (key, model, messages, maxTokens) => ({
     url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
@@ -259,25 +339,13 @@ const REQ: Record<
       })),
       generationConfig: { maxOutputTokens: maxTokens },
     },
-    parse: (d, st) => {
-      const dd = d as {
-        error?: { code?: number; message?: string; status?: string };
-        candidates?: { finishReason?: string; content?: { parts?: { thought?: boolean; text?: string }[] } }[];
-        promptFeedback?: { blockReason?: string };
-      };
-      if (dd.error)
-        throw {
-          code: mapErr(dd.error.code || 0, dd.error.message || "", dd.error.status || ""),
-          message: dd.error.message,
-        };
-      const c = dd.candidates?.[0];
-      if (c?.finishReason === "MAX_TOKENS") st.stop = "len";
-      if (dd.promptFeedback?.blockReason) throw { code: "refused" };
-      return (c?.content?.parts || [])
-        .filter((p) => !p.thought && p.text)
-        .map((p) => p.text)
-        .join("");
-    },
+    parse: parseGemini,
+  }),
+  mistral: (key, model, messages, maxTokens) => ({
+    url: "https://api.mistral.ai/v1/chat/completions",
+    headers: { "content-type": "application/json", authorization: "Bearer " + key },
+    body: { model, messages, stream: true, max_tokens: maxTokens },
+    parse: parseMistral,
   }),
 };
 
@@ -301,9 +369,27 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 export interface ClientConfig {
-  provider: ProviderId;
+  provider: ByoProviderId;
   key: string;
   model: string;
+}
+
+/** Add the json() helper shared by direct-provider and demo clients. */
+function attachJson(
+  call: (input: string | Turn[], opts?: CallOpts) => Promise<{ text: string; truncated: boolean }>,
+): Client {
+  const fn = ((input: string | Turn[], opts?: CallOpts) => call(input, opts)) as Client;
+  fn.json = async (input: string | Turn[], opts: CallOpts = {}) => {
+    const withRule =
+      typeof input === "string"
+        ? input + "\n\nRespond with only the JSON value. No prose before or after it, no code fences."
+        : input;
+    const r = await call(withRule, opts);
+    const v = parseJsonLoose(r.text);
+    if (v === undefined) throw { code: "invalid_json", text: r.text };
+    return v;
+  };
+  return fn;
 }
 
 /**
@@ -376,18 +462,67 @@ export function createClient({ provider, key, model }: ClientConfig): Client {
     return { text, truncated: st.stop === "len" };
   }
 
-  const fn = ((input: string | Turn[], opts?: CallOpts) => call(input, opts)) as Client;
-  fn.json = async (input: string | Turn[], opts: CallOpts = {}) => {
-    const withRule =
-      typeof input === "string"
-        ? input + "\n\nRespond with only the JSON value. No prose before or after it, no code fences."
-        : input;
-    const r = await call(withRule, opts);
-    const v = parseJsonLoose(r.text);
-    if (v === undefined) throw { code: "invalid_json", text: r.text };
-    return v;
-  };
-  return fn;
+  return attachJson(call);
+}
+
+/**
+ * Streaming client for the shared demo. The hidden provider key and rate limits live in
+ * `netlify/functions/demo.mjs`; the browser only talks to the same-origin `/api/demo` route.
+ */
+export function createDemoClient({ model }: { model: string }): Client {
+  async function call(input: string | Turn[], opts: CallOpts = {}): Promise<{ text: string; truncated: boolean }> {
+    if (!model) throw { code: "model_not_found" };
+    const messages = toMessages(input);
+    const chars = messages.reduce((n, m) => n + m.content.length, 0);
+    if (chars > DEMO_MAX_INPUT_CHARS) throw { code: "prompt_too_large" };
+
+    let res: Response;
+    try {
+      res = await fetch("/api/demo", {
+        method: "POST",
+        signal: opts.signal,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model, messages, maxTokens: DEMO_MAX_OUTPUT_TOKENS }),
+      });
+    } catch (e) {
+      throw { code: (e as Error)?.name === "AbortError" ? "cancelled" : "network", message: String(e) };
+    }
+    if (!res.ok) {
+      const e = await errFrom(res);
+      // Netlify's platform backstop returns a plain 429. A long Retry-After means the
+      // daily budget is gone, not that the provider is briefly busy.
+      const wait = Number(res.headers.get("retry-after") || 0);
+      if (e.code === "rate_limited" && wait > 120) e.code = "demo_limit";
+      // A static-only host may serve its SPA fallback or a generic 404 at this path.
+      if (res.status === 404) e.code = "demo_unavailable";
+      throw e;
+    }
+    if (!(res.headers.get("content-type") || "").includes("text/event-stream")) {
+      throw { code: "demo_unavailable" };
+    }
+
+    // The proxy sets this header so the client can use the same parser as the direct provider.
+    const upstream = res.headers.get("x-demo-provider") === "gemini" ? "gemini" : "mistral";
+    const parse = upstream === "gemini" ? parseGemini : parseMistral;
+    let text = "";
+    const st: StreamState = { stop: null };
+    try {
+      await readSSE(res, (d) => {
+        const t = parse(d, st);
+        if (t) {
+          text += t;
+          if (opts.onText) opts.onText({ text, delta: t });
+        }
+      });
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") throw { code: "cancelled", text };
+      throw (e as AIError)?.code ? Object.assign(e as object, { text }) : { code: "upstream_error", text };
+    }
+    if (!text.trim()) throw { code: st.stop === "len" ? "truncated_empty" : "empty_completion" };
+    return { text, truncated: st.stop === "len" };
+  }
+
+  return attachJson(call);
 }
 
 export interface ModelInfo {
@@ -395,7 +530,7 @@ export interface ModelInfo {
   name: string;
 }
 
-export async function listModels(provider: ProviderId, key: string): Promise<ModelInfo[]> {
+export async function listModels(provider: ByoProviderId, key: string): Promise<ModelInfo[]> {
   let r: Response;
   const H: { url: string; headers: Record<string, string> } = {
     anthropic: {
@@ -411,6 +546,7 @@ export async function listModels(provider: ProviderId, key: string): Promise<Mod
       url: "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
       headers: { "x-goog-api-key": key },
     },
+    mistral: { url: "https://api.mistral.ai/v1/models", headers: { authorization: "Bearer " + key } },
   }[provider];
   try {
     r = await fetch(H.url, { headers: H.headers });
@@ -431,6 +567,13 @@ export async function listModels(provider: ProviderId, key: string): Promise<Mod
       .sort((a, b) => (b.created || 0) - (a.created || 0))
       .map((m) => ({ id: m.id, name: m.id }));
   }
+  if (provider === "mistral") {
+    const skip = /(embed|moderation|ocr|audio|tts|vision|classifier)/i;
+    return (j.data || [])
+      .filter((m) => !skip.test(m.id))
+      .map((m) => ({ id: m.id, name: m.display_name || m.id }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+  }
   const skip = /(embedding|image|tts|audio|live|aqa|vision|native-audio)/i;
   return (j.models || [])
     .filter(
@@ -445,7 +588,10 @@ export async function listModels(provider: ProviderId, key: string): Promise<Mod
 
 export function preferModel(provider: ProviderId, models: ModelInfo[]): ModelInfo | undefined {
   const by = (re: RegExp) => models.find((m) => re.test(m.id));
+  if (provider === "demo") return by(/^mistral-small/i) || models[0] || DEMO_MODELS[0];
   if (provider === "anthropic") return by(/sonnet/i) || models[0];
   if (provider === "openai") return by(/^gpt-\d(\.\d+)?$/i) || by(/^gpt-\d/i) || models[0];
+  if (provider === "mistral")
+    return by(/^mistral-small/i) || by(/^mistral-medium/i) || by(/^mistral-large/i) || models[0];
   return by(/^gemini-[\d.]+-flash$/i) || by(/flash(?!.*(lite|preview|exp))/i) || by(/flash/i) || models[0];
 }

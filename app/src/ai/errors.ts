@@ -17,6 +17,8 @@ const COPY: Partial<Record<ErrorCode, string>> = {
   empty_completion: "The model returned an empty answer. Try again or pick another model.",
   cancelled: "Stopped.",
   upstream_error: "The AI provider returned an error. Try again.",
+  demo_limit: "The demo has reached its limit for now. Use your own API key in AI settings for more.",
+  demo_unavailable: "The demo isn't available right now. Use your own API key in AI settings.",
 };
 
 export function errCopy(code: ErrorCode | string | undefined, fallback: string): string {

@@ -85,13 +85,15 @@ public/                    the deployable site (publish this folder)
 tests/                     unit tests for model/, lib/ and ai/ helpers
 docs/                      README images
 scripts/serve.js           zero-dependency dev server
-.github/workflows/         CI (legacy + app lint/format/build) and Netlify deploy
+.github/workflows/         CI (legacy + app lint/format/test/build) and Netlify deploy
 netlify.toml               Netlify config (builds app/, publishes app/dist)
 ```
 
-## AI features: bring your own key
+## AI features: demo or bring your own key
 
-Chat, AI mapping and the gap review work with any of three providers. Each user picks one under **AI settings** in the app and adds their own key:
+> **React app:** it defaults to a no-key **Try the demo** option backed by a Netlify Function (Mistral Small 4 or Gemini 3.5 Flash-Lite), also supports Mistral as a BYO provider, and shows a short privacy banner while the demo is active. Configure the server keys as described in [`app/README.md`](app/README.md). The details below describe the legacy vanilla app.
+
+Chat, AI mapping and the gap review work with any of three legacy providers. Each user picks one under **AI settings** in the app and adds their own key:
 
 | Provider           | Get a key                                                            | Free option                                                                           |
 | ------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
