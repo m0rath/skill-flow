@@ -1,46 +1,25 @@
-# Skill Flow Mapper
-
-> **React app:** the production site lives in [`app/`](app/README.md) (Vite + React). The original vanilla implementation in `public/` is kept as a read-only reference; this document describes it.
-
-Upload a Claude skill (`SKILL.md`, or a zipped skill folder) or any Markdown playbook and see the whole workflow at once:
-
-- **Diagram**: every step in order, decision points with one lane per outcome, loops, and the files each step creates. You can pan, zoom, collapse branches and step through with ← / →.
-- **Mind map**: the skill name in the centre with its steps, branches and outputs around it. Links between steps that pass data are drawn automatically, and you can drag from a dot to add your own links.
-- **Suggestions**: gaps such as "it says what to do if X exists, but not if it doesn't", missing failure handling, loops with no end and missing files. Each gap has a one-click fix.
-- **Chat with AI** (Claude, ChatGPT or Gemini): ask about one step or the whole flow. When you ask for a fix, the AI edits the file and the diagram redraws. Undo is always available.
-- **Changes**: the net diff of everything you or the AI changed since upload, with line numbers. Copy it, download it as a `.patch`, or restore the original file.
-- **Export** the diagram or mind map as a PNG or SVG image (the whole view, whatever the zoom), or copy the flow as Mermaid code.
-- **Download** the updated `.md`, or a `.zip` for multi-file skills.
-
-The page opens with an example skill (a pull request review). Each of its steps shows off one feature, so clicking through them is a quick tour of the app.
+# justools — Skill Flow & Project Flow Mapper
 
 [![CI](https://github.com/m0rath/skill-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/m0rath/skill-flow/actions/workflows/ci.yml)
 
-![Skill Flow Mapper showing the example PR review skill as a diagram, with the decision step selected](docs/screenshot.png)
+Visual tools for AI agent skills, workflows and software codebases. AI drafts. Humans decide.
 
-The original app is fully static: HTML, CSS and native ES modules, plus a vendored copy of JSZip and self-hosted fonts. It has no build step and no backend; `public/` is the legacy site. The production React app is in [`app/`](app/README.md) and is built with `npm run build`.
+- **Skill Flow Mapper** (`/skill-flow`) — upload a `SKILL.md`, Markdown playbook or zipped skill folder. See the workflow as a diagram or mind map, review AI suggestions for gaps, fix the file, and export PNG, SVG, Mermaid or Markdown.
+- **Project Flow Mapper** (`/project-flow`) — open a project folder or `.zip`. Inspect its architecture, startup paths, routes and call flows, review suggestions, and export the result.
 
-## Try It Online
+[![Skill Flow Mapper showing the example PR review skill](docs/screenshot.png)](https://justools.in/)
 
-No installation required. You can access the live, hosted version of the tool here:
-[justools.in](https://justools.in/)
+## Try it
 
-The hosted version provides direct access to the available tools in your browser.
-You just need the api key, google gemini offers it for free [here](https://aistudio.google.com/apikey?_gl=1*329ebo*_ga*MjgyNjg4MzU1LjE3OTA3NjA0NjQ.*_ga_P1DBVKWT6V*czE3OTA3NjA0NjMkbzEkZzAkdDE3OTA3NjA0NjgkajU1JGwwJGgyMTQyMzMyNjI2)
+[justools.in](https://justools.in/) — no install required.
+
+## Stack
+
+Vite 8 · React 19 · TypeScript 5.9 · React Router 7 · Zustand 5 · `motion` · `jszip` · `html-to-image` · Netlify Functions 2.0 · Netlify Blobs.
+
+The production site is the React app in [`app/`](app/README.md). Netlify builds `app/` and publishes `app/dist/`.
 
 ## Run locally
-
-You need Node.js 20 or newer (only for the dev server and tooling).
-
-```bash
-npm install
-npm start
-# then open http://localhost:8000
-```
-
-ES modules don't load from `file://`, so serve the folder instead of opening `index.html` directly. Any static server works, for example `python3 -m http.server -d public 8000`.
-
-For the production React app:
 
 ```bash
 cd app
@@ -49,86 +28,75 @@ npm run dev
 # then open http://localhost:5173
 ```
 
-## Development
+The diagram, mind map, quick checks, outline, source editing and downloads work without a key. Chat, AI mapping and the gap review need either the shared demo or your own provider key.
+
+### Demo AI
+
+The default **Try the demo** model is **Gemini 3.5 Flash-Lite**; **Mistral Small 4** is also selectable. Requests go to the same-origin `/api/demo` route, which Netlify rewrites to `app/netlify/functions/demo.mjs`. The provider keys stay server-side and the function enforces per-IP and global limits.
+
+For local demo requests, create `app/.env.local` with:
 
 ```bash
-npm run lint          # ESLint
-npm run format        # Prettier (write)
-npm run format:check  # Prettier (check only)
-npm test              # unit tests (node --test)
-npm run check         # all of the above; this is what CI runs
+DEMO_GEMINI_API_KEY=
+DEMO_MISTRAL_API_KEY=
+# optional, stable salt for hashing visitor IPs
+DEMO_IP_SALT=
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+The demo proxy is served by Vite in development. `npm run preview` does not include the function; use `npm run dev` or `netlify dev` when testing it.
+
+### Bring your own key
+
+Choose Anthropic, OpenAI, Gemini or Mistral in **AI settings** and paste a key. BYO requests go directly from the browser to the selected provider; the key is not sent through this site. The demo shows a short privacy banner because its prompts go to the selected provider and may be used to improve their models.
+
+See [`app/README.md`](app/README.md) for configuration, limits, privacy details and deployment.
+
+## Development
+
+Run these from `app/`:
+
+```bash
+npm run dev            # Vite dev server
+npm run build          # type-check + production build to app/dist
+npm run preview        # serve the production build
+npm run check          # typecheck + lint + format check + tests
+npm test               # demo proxy tests
+npm run lint
+npm run format:check
+```
+
+CI runs the same app checks and build in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The Netlify deploy workflow publishes on pushes to `main` and on manual dispatch, after the checks pass.
 
 ## Project structure
 
 ```
-public/                    the deployable site (publish this folder)
-  index.html               markup only; no inline scripts or style blocks
-  _headers                 security headers for Netlify / Cloudflare Pages
-  .nojekyll                tells GitHub Pages to serve files as-is
-  favicon.svg  og-image.png
-  vendor/jszip.min.js      JSZip 3.10.1 (reads and writes .zip skill folders)
-  assets/
-    css/                   fonts · base (tokens, themes) · layout · diagram · mindmap · panels · chat
-    fonts/                 IBM Plex, latin subset (SIL Open Font License)
-    js/
-      main.js              entry point: wires up modules and boots the app
-      state.js             shared app state and localStorage persistence
-      lib/                 small pure helpers (escaping, DOM, Markdown, loose JSON, line diff)
-      data/                the built-in example skill
-      model/               parsing and analysis, no DOM (quick parser, normaliser, checks, Mermaid export)
-      ui/                  views: diagram, mind map, outline, source, changes, suggestions, side panel, pan/zoom, image export
-      app/                 file upload / download and undo history
-      ai/                  providers, prompts, AI mapping, chat and edit application, settings
-tests/                     unit tests for model/, lib/ and ai/ helpers
+app/                       React + TypeScript SPA (the production app)
+  index.html               document shell and social metadata
+  public/                  static assets, _headers, _redirects, fonts, favicon
+  netlify/functions/       demo.mjs — hidden-key AI proxy and rate limits
+  src/                     components, features, stores, AI/model/lib code
+  test/                    demo proxy tests
+  vite.config.ts           React, CSP and local /api/demo middleware
+netlify.toml               Netlify build (base app/, publish app/dist/)
+.github/workflows/         CI and Netlify deploy
 docs/                      README images
-scripts/serve.js           zero-dependency dev server
-.github/workflows/         CI (legacy + app lint/format/test/build) and Netlify deploy
-netlify.toml               Netlify config (builds app/, publishes app/dist)
 ```
 
-## AI features: demo or bring your own key
+## Security
 
-> **React app:** it defaults to a no-key **Try the demo** option backed by a Netlify Function (Gemini 3.5 Flash-Lite by default, with Mistral Small 4 also available), also supports Mistral as a BYO provider, and shows a short privacy banner while the demo is active. Configure the server keys as described in [`app/README.md`](app/README.md). The details below describe the legacy vanilla app.
+- The demo's provider keys live only in the Netlify Function environment.
+- BYO keys stay in the browser and are sent only to the provider the user selects.
+- The CSP allowlists the AI providers, GitHub import and Google Analytics. Keep `app/vite.config.ts` and `app/public/_headers` in sync when adding a host.
+- Uploaded files and AI output are untrusted. Render them through React or the escaping helpers; never evaluate them.
 
-Chat, AI mapping and the gap review work with any of three legacy providers. Each user picks one under **AI settings** in the app and adds their own key:
-
-| Provider           | Get a key                                                            | Free option                                                                           |
-| ------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Anthropic (Claude) | [console.anthropic.com](https://console.anthropic.com/settings/keys) | No free tier; new accounts may get a small trial credit                               |
-| OpenAI (ChatGPT)   | [platform.openai.com](https://platform.openai.com/api-keys)          | No; API usage is billed separately from ChatGPT Plus                                  |
-| Google Gemini      | [aistudio.google.com](https://aistudio.google.com/app/apikey)        | Yes, a rate-limited free tier (on it, Google may use prompts to improve its products) |
-
-- **Where the key goes:** the browser calls the chosen provider directly (`api.anthropic.com`, `api.openai.com` or `generativelanguage.googleapis.com`). The key is never sent anywhere else. The page's Content Security Policy only allows network connections to those three hosts.
-- **Where keys are kept:** by default only for the current tab (sessionStorage). If the user ticks **Remember keys on this device**, they're kept in this browser's localStorage. Each provider's key is stored separately, and **Remove this key** deletes one.
-- **Models:** **Test key** lists the models the key can use, straight from the provider, so the list stays current. You can also type any model ID.
-- **Quality:** turning a skill into a diagram needs a model that returns clean structured JSON. Larger models (Claude Sonnet or Opus, a full-size GPT model, Gemini Pro or Flash) do this well. Very small models may produce rougher diagrams and fixes.
-- **Cost:** usage is billed to the key owner. Set a spend limit with your provider.
-- **Without a key:** the diagram, mind map, quick checks, outline, source editing and download all work offline. They use a built-in parser that is less accurate than a model.
-
-### Security notes for shared deployments
-
-- Anyone who can run JavaScript on the page could read a key stored there. Host only on a domain you control, and keep third-party scripts to a minimum. The only one is Google Analytics, and only when a measurement ID is set at deploy time. Uploaded file content is always escaped, never run.
-- For a team deployment where people shouldn't handle raw keys, put a small proxy (for example a Netlify Function or Cloudflare Worker) in front of the provider. The proxy holds the key and checks users, and the request URLs in `REQ` in `public/assets/js/ai/providers.js` point at it. The app doesn't include a proxy.
-- Check your organization's policy on API keys in browsers before sharing the link widely.
-
-## Customizing
-
-- **Prompts:** `public/assets/js/ai/prompts.js` (`mapPrompt`, `chatInstructions`, `reviewPrompt`).
-- **Providers:** request formats, model listing and default model choice are in `public/assets/js/ai/providers.js`.
-- **Colors:** CSS variables at the top of `public/assets/css/base.css`, with separate light and dark values.
-- **Quick parser** (used without an API key): `public/assets/js/model/quick-parse.js`.
-- **Example skill** shown on first visit: `public/assets/js/data/example.js`.
-- **Social preview:** replace `public/og-image.png`. If you deploy under another domain, change `og:url` and `og:image` in `public/index.html`; link previews need absolute URLs.
-- **New external hosts** (for example a proxy or another provider): add them to `connect-src` in both the CSP `<meta>` tag in `public/index.html` and `public/_headers`.
+See [`SECURITY.md`](SECURITY.md) for the reporting process.
 
 ## License
 
-[MIT](LICENSE). Bundled third-party files keep their own licenses:
+[MIT](LICENSE). Bundled third-party assets keep their own licenses:
 
-- JSZip: MIT or GPLv3 (`public/vendor/JSZIP-LICENSE.md`)
-- IBM Plex fonts: SIL Open Font License 1.1 (`public/assets/fonts/OFL.txt`)
+- JSZip: MIT or GPLv3
+- html-to-image: MIT
+- IBM Plex fonts: SIL Open Font License 1.1 (`app/public/assets/fonts/OFL.txt`)
 
-See also [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and [CHANGELOG.md](CHANGELOG.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and [CHANGELOG.md](CHANGELOG.md).

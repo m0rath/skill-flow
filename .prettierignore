@@ -1,7 +1,0 @@
-node_modules/
-public/vendor/
-project-flow-mapper/
-app/
-.netlify/
-package-lock.json
-fonts/

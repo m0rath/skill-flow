@@ -4,8 +4,8 @@
 
 ## Tools
 
-- [Skill Flow Mapper](https://justools.in/skill-flow-mapper): Upload a SKILL.md, Markdown playbook or zipped skill folder. See its workflow as a diagram or mind map, review AI suggestions for gaps, and export PNG, SVG, Mermaid or Markdown. Works with Claude, ChatGPT or Gemini using your own API key.
-- [Project Flow Mapper](https://justools.in/project-flow-mapper): Turn a project plan or workflow into a diagram, review AI suggestions and export the result. [CONFIRM description]
+- [Skill Flow Mapper](https://justools.in/skill-flow): Upload a SKILL.md, Markdown playbook or zipped skill folder. See its workflow as a diagram or mind map, review AI suggestions for gaps, and export PNG, SVG, Mermaid or Markdown. Works with the shared demo or your own Anthropic, OpenAI, Gemini or Mistral key.
+- [Project Flow Mapper](https://justools.in/project-flow): Open a project folder or zip to see its architecture, startup paths, routes and call flows. Review AI suggestions for gaps and export the result.
 
 ## Guides
 

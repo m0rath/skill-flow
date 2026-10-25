@@ -33,9 +33,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            app/package-lock.json
+          cache-dependency-path: app/package-lock.json
       # The Google Analytics ID lives in the Netlify project's environment variables, not in git.
       # Netlify doesn't build this site, so the value is fetched from the Netlify API and written into the file.
       # Without it (or if the lookup fails) the site deploys without analytics.

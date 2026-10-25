@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "node --test test/demo.test.mjs",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

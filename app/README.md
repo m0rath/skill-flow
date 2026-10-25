@@ -7,8 +7,6 @@ It ships two tools:
 - **Skill Flow Mapper** (`/skill-flow`) — map, question and fix a Claude skill or Markdown playbook.
 - **Project Flow Mapper** (`/project-flow`) — open a whole project folder, see its architecture and flows, then question and fix it.
 
-> The original vanilla-JS app lives in the repository root `public/` and is kept as a read-only reference. This package (`app/`) is the port.
-
 ## Stack
 
 Vite 8 · React 19 · TypeScript 5.9 · React Router 7 · Zustand 5 · `motion` · `jszip` · `html-to-image` · Netlify Functions 2.0 · Netlify Blobs.
@@ -18,7 +16,7 @@ Vite 8 · React 19 · TypeScript 5.9 · React Router 7 · Zustand 5 · `motion` 
 - Node.js **>= 20** (`engines.node`).
 - npm (bundled with Node). No package manager pin beyond the committed `package-lock.json`.
 
-The static app builds with no secrets. The **shared demo** needs two provider keys in the server environment; without them the demo reports itself as unavailable and users can still bring their own key. See [Configuration](#configuration).
+The app builds with no secrets. The **shared demo** needs two provider keys in the server environment; without them the demo reports itself as unavailable and users can still bring their own key. See [Configuration](#configuration).
 
 ## Scripts
 
@@ -31,6 +29,7 @@ Run all commands from `app/`.
 | `npm run preview`      | Serve the production build locally (port 5173).     |
 | `npm run typecheck`    | `tsc -b --noEmit`.                                  |
 | `npm test`             | Node test runner: demo proxy validation/limits.     |
+| `npm run check`        | Typecheck, lint, format check and tests.            |
 | `npm run lint`         | ESLint (flat config).                               |
 | `npm run lint:fix`     | ESLint with `--fix`.                                |
 | `npm run format`       | Prettier write (`printWidth` 120).                  |
@@ -117,7 +116,7 @@ BYO keys are never bundled or committed. The Content-Security-Policy in `vite.co
 
 ## Deployment
 
-`npm run build` emits a static SPA into `dist/`. CI (`.github/workflows/ci.yml`) checks both the legacy reference app and this package; `.github/workflows/deploy-netlify.yml` builds `app/` and publishes `app/dist/` plus `app/netlify/functions/` to Netlify on every push to `main`, after the checks pass. Manual `workflow_dispatch` runs are supported.
+`npm run build` emits a static SPA into `dist/`. CI (`.github/workflows/ci.yml`) checks this package; `.github/workflows/deploy-netlify.yml` builds `app/` and publishes `app/dist/` plus `app/netlify/functions/` to Netlify on every push to `main`, after the checks pass. Manual `workflow_dispatch` runs are supported.
 
 Netlify-specific files:
 

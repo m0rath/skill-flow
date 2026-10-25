@@ -4,37 +4,40 @@ Thanks for helping. Bug reports, ideas and pull requests are all welcome.
 
 ## Setup
 
-You need Node.js 20 or newer. Node is only used for the dev server, linting and tests; the app itself has no build step.
+You need Node.js 20 or newer.
 
 ```bash
+cd app
 npm install
-npm start          # http://localhost:8000
+npm run dev        # http://localhost:5173
 ```
 
-ES modules don't load from `file://`, so open the app through `npm start` (or any static server) instead of
-double-clicking `index.html`.
+The app is a Vite + React single-page app. The demo AI proxy runs as a Netlify Function; Vite serves the same `/api/demo` route in development. To test demo calls locally, create `app/.env.local` from `app/.env.example` and add the server-side demo keys.
 
 ## Before you open a pull request
 
+From `app/`:
+
 ```bash
-npm run check      # lint + format check + unit tests
+npm run check      # typecheck + lint + format check + tests
 npm run format     # auto-fix formatting
+npm run build      # production build
 ```
 
-Also try your change in a browser, in light and dark mode.
+Also try your change in a browser, in light and dark mode, and check the mobile layout.
 
 ## Code layout
 
-See [Project structure](README.md#project-structure) in the README. In short:
+See [Project structure](app/README.md#structure) and the root [README](README.md#project-structure). In short:
 
-- `model/` and `lib/` are pure functions with no DOM access. Put logic here when you can, and add a test in `tests/`.
-- `ui/` renders views. `app/` handles files and undo. `ai/` talks to the providers.
-- Modules have no side effects when imported. Each one exports an `init*()` function that `main.js` calls once.
-- Shared state lives in `S` in `state.js`. Call `save()` after changing anything that should survive a reload.
+- `src/model/` and `src/lib/` are pure helpers. Put logic here when you can.
+- `src/features/` holds the Skill Flow and Project Flow views and stores.
+- `src/ai/` holds provider clients, prompts, edits and demo/BYO behavior.
+- `netlify/functions/demo.mjs` is the hidden-key AI proxy and rate limiter.
 
 ## Guidelines
 
-- Keep it dependency-free at runtime. JSZip is the only vendored library.
-- Escape everything that comes from a file or an AI reply with `esc()`.
-- No inline `<script>` or `on*=` attributes: the Content Security Policy blocks them.
+- Keep provider keys out of source and client bundles. The demo keys belong in Netlify environment variables; BYO keys belong in the browser.
+- Treat uploaded files and AI output as untrusted. Prefer React text rendering, or escape through `src/lib/util.ts`; do not evaluate content.
+- If you add an external host, update the CSP in both `app/vite.config.ts` and `app/public/_headers`.
 - Keep pull requests focused on one change.
