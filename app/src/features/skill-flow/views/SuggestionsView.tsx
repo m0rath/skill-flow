@@ -86,7 +86,7 @@ export function SuggestionsView() {
             </>
           ) : (
             <button className="btn primary" type="button" onClick={() => setSettingsOpen(true)}>
-              Add an API key to use AI's review
+              Open AI settings to use the review
             </button>
           )}
         </div>
@@ -133,7 +133,7 @@ export function SuggestionsView() {
               ? busy.sugg
                 ? "AI is reviewing the workflow…"
                 : "AI reads the whole file and lists what could go wrong: unhandled cases, missing validation, ambiguous steps and outputs nobody uses."
-              : "Add an API key (Anthropic, OpenAI or Gemini) in AI settings to use this."}
+              : "Open AI settings to use the demo, or add your own key."}
           </p>
         )}
       </div>

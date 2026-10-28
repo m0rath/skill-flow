@@ -5,7 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "node_modules/**", "_ref/**", "public/**", "coverage/**"] },
+  { ignores: ["dist/**", "node_modules/**", "_ref/**", "public/**", "coverage/**", ".netlify/**"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -25,6 +25,18 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": ["error", { args: "none", caughtErrors: "none" }],
+      "no-empty": ["error", { allowEmptyCatch: true }],
+    },
+  },
+  {
+    files: ["netlify/functions/**/*.mjs", "test/**/*.mjs", "eslint.config.js"],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: "module",
+      globals: globals.node,
+    },
+    rules: {
+      "no-unused-vars": ["error", { args: "none", caughtErrors: "none" }],
       "no-empty": ["error", { allowEmptyCatch: true }],
     },
   },

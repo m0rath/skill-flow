@@ -1,7 +1,7 @@
 /*
   Shared types for the Project Flow Mapper (the code-aware half of the app).
-  These mirror the shapes produced by the legacy analyser in public/index.html so the ported
-  logic and the React views can talk to each other without guessing.
+  These mirror the shapes produced by the original analyser so the ported logic and the
+  React views can talk to each other without guessing.
 */
 
 /** A text file read from a folder/zip (or a virtual file created by the mapper). */

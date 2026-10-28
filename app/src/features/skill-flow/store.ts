@@ -689,7 +689,7 @@ export const useSkillStore = create<SkillState>()((set, get) => {
 
   const client = (): Client | null => useAIStore.getState().client;
   const openSettings = (code?: string) => {
-    if (code && ["invalid_key", "no_key", "model_not_found"].includes(code))
+    if (code && ["invalid_key", "no_key", "model_not_found", "demo_unavailable", "demo_limit"].includes(code))
       window.setTimeout(() => useAIStore.getState().setSettingsOpen(true), 50);
   };
 
@@ -1064,7 +1064,7 @@ export const useSkillStore = create<SkillState>()((set, get) => {
       const c = client();
       if (!c) {
         openSettings("no_key");
-        useAppStore.getState().toast("Add an API key to use AI entry points");
+        useAppStore.getState().toast("Open AI settings to use the demo or add your own key");
         return;
       }
       const s = get();

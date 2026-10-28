@@ -1,6 +1,15 @@
 import { create } from "zustand";
 
-import { PROVIDERS, createClient, type Client, type ProviderId } from "@/ai/providers";
+import {
+  DEFAULT_DEMO_MODEL,
+  DEMO_MODELS,
+  PROVIDERS,
+  createClient,
+  createDemoClient,
+  demoModelName,
+  type Client,
+  type ProviderId,
+} from "@/ai/providers";
 
 const AI_KEY = "skillflow:ai";
 const KEYS_KEY = "skillflow:keys";
@@ -52,16 +61,17 @@ function stringMap(v: unknown): ProviderKeys {
 
 function loadInitial(): { provider: ProviderId; keys: ProviderKeys; models: ProviderKeys; remember: boolean } {
   const out = {
-    provider: "anthropic" as ProviderId,
+    provider: "demo" as ProviderId,
     keys: {} as ProviderKeys,
-    models: {} as ProviderKeys,
+    models: { demo: DEFAULT_DEMO_MODEL } as ProviderKeys,
     remember: false,
   };
   try {
     const raw = readStore(() => JSON.parse(localStorage.getItem(AI_KEY) || "{}") as unknown, null);
     const s = isObj(raw) ? raw : {};
     if (isProviderId(s.provider)) out.provider = s.provider;
-    out.models = stringMap(s.models);
+    out.models = { ...out.models, ...stringMap(s.models) };
+    if (!DEMO_MODELS.some((m) => m.id === out.models.demo)) out.models.demo = DEFAULT_DEMO_MODEL;
     const storedKeys = stringMap(s.keys);
     out.remember = Object.keys(storedKeys).length > 0;
     const sessionKeys = stringMap(
@@ -76,6 +86,7 @@ function loadInitial(): { provider: ProviderId; keys: ProviderKeys; models: Prov
         out.remember = true;
       }
       if (typeof old.model === "string" && old.model) out.models.anthropic = old.model;
+      out.provider = "anthropic";
       localStorage.removeItem(LEGACY_KEY);
     }
   } catch {
@@ -85,6 +96,10 @@ function loadInitial(): { provider: ProviderId; keys: ProviderKeys; models: Prov
 }
 
 function clientFor(provider: ProviderId, keys: ProviderKeys, models: ProviderKeys): Client | null {
+  if (provider === "demo") {
+    const model = (models.demo || DEFAULT_DEMO_MODEL).trim();
+    return createDemoClient({ model });
+  }
   const key = (keys[provider] || "").trim();
   const model = (models[provider] || "").trim();
   if (!key || !model) return null;
@@ -93,9 +108,9 @@ function clientFor(provider: ProviderId, keys: ProviderKeys, models: ProviderKey
 
 export const useAIStore = create<AIState>()((set, get) => {
   const initial = readStore(loadInitial, {
-    provider: "anthropic" as ProviderId,
+    provider: "demo" as ProviderId,
     keys: {},
-    models: {},
+    models: { demo: DEFAULT_DEMO_MODEL },
     remember: false,
   });
   return {
@@ -104,12 +119,21 @@ export const useAIStore = create<AIState>()((set, get) => {
     settingsOpen: false,
     setSettingsOpen: (open) => set({ settingsOpen: open }),
     setProvider: (p) => {
-      set({ provider: p });
+      const models =
+        p === "demo" && !DEMO_MODELS.some((m) => m.id === get().models.demo)
+          ? { ...get().models, demo: DEFAULT_DEMO_MODEL }
+          : get().models;
+      set({ provider: p, models });
       get().persist();
       get().apply();
     },
     load: () => {
-      const s = readStore(loadInitial, { provider: "anthropic", keys: {}, models: {}, remember: false });
+      const s = readStore(loadInitial, {
+        provider: "demo",
+        keys: {},
+        models: { demo: DEFAULT_DEMO_MODEL },
+        remember: false,
+      });
       set(s);
       get().apply();
     },
@@ -129,11 +153,16 @@ export const useAIStore = create<AIState>()((set, get) => {
       }
     },
     configure: ({ provider, keys, models, remember }) => {
-      set({ provider, keys, models, remember });
+      const nextModels =
+        provider === "demo" && !DEMO_MODELS.some((m) => m.id === models.demo)
+          ? { ...models, demo: DEFAULT_DEMO_MODEL }
+          : models;
+      set({ provider, keys, models: nextModels, remember });
       get().persist();
       get().apply();
     },
     forget: (provider) => {
+      if (provider === "demo") return;
       const keys = { ...get().keys, [provider]: "" };
       set({ keys });
       get().persist();
@@ -144,6 +173,9 @@ export const useAIStore = create<AIState>()((set, get) => {
 
 /** Current key / model label for the header button. */
 export function currentKeyLabel(state: Pick<AIState, "provider" | "keys" | "models" | "client">): string {
+  if (state.provider === "demo") {
+    return `Demo: ${demoModelName(state.models.demo || DEFAULT_DEMO_MODEL)}`;
+  }
   const key = state.keys[state.provider] || "";
   const model = state.models[state.provider] || "";
   if (key && model) return `${PROVIDERS[state.provider].short}: ${model.replace(/^(claude-|models\/)/, "")}`;

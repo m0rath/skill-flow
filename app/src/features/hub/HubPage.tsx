@@ -255,7 +255,7 @@ export function HubPage() {
               <span className="comp-label">YOU</span>
               <h3 className="comp-title">Keep the final say</h3>
               <ul className="comp-list">
-                <li>Pick the AI: Claude, ChatGPT or Gemini, with your own API key</li>
+                <li>Pick the AI: use the demo, or bring your own key for Claude, ChatGPT, Gemini or Mistral</li>
                 <li>Accept, edit or dismiss every suggestion, or allow automatic fixes</li>
                 <li>Own the final file and export it as .md, PNG, SVG or Mermaid</li>
               </ul>

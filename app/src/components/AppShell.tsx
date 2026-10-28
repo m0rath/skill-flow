@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 
+import { DemoBanner } from "@/components/DemoBanner";
 import { type AppMode, Header } from "@/components/Header";
 import { Toaster } from "@/components/Toaster";
 import { GitImportModal } from "@/features/GitImportModal";
@@ -66,6 +67,7 @@ export function AppShell({ mode, actions, children }: { mode: AppMode; actions?:
         Skip to content
       </a>
       <Header mode={mode} actions={actions} />
+      {mode !== "hub" && <DemoBanner />}
       <main id="main-content" className="app-main" tabIndex={-1}>
         {children}
       </main>

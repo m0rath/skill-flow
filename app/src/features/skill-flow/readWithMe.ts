@@ -531,7 +531,7 @@ ${untrustedBlock(
       logAdd({ who: "you", text: question });
       if (!c) {
         setWho("Answer");
-        setCaption("Chat needs an API key. Add one in AI settings to ask questions.");
+        setCaption("Chat needs the demo or an API key. Open AI settings to ask questions.");
         return;
       }
       const wasPlaying = statusRef.current === "playing" || statusRef.current === "paused";

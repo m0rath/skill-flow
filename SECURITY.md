@@ -8,18 +8,18 @@ You should get a reply within a week.
 
 ## What's in scope
 
-Skill Flow Mapper runs entirely in the browser. The most important things to protect are:
+justools has two ways to use AI:
 
-- **API keys.** Users paste their own keys. Keys are only sent to the provider the user picked, and are kept in
-  `sessionStorage` (or `localStorage` if the user opts in).
-- **Uploaded files.** Skill files and AI replies are untrusted. They must always be escaped before rendering and
-  never run as code.
+- **Shared demo.** Provider keys live only in the Netlify Function environment. The browser calls the same-origin `/api/demo` route; the function adds the hidden key, enforces rate limits and streams the response.
+- **Bring your own key.** Users paste their own key. It is kept in `sessionStorage` (or `localStorage` if the user opts in) and sent only to the provider they selected.
 
-Examples of in-scope issues: XSS through a crafted `SKILL.md`, zip or AI reply; a key leaking to any host other than the
-chosen provider; ways around the Content Security Policy.
+Uploaded files, project archives and AI replies are untrusted. They must be rendered as text or through the escaping helpers, never executed.
+
+Examples of in-scope issues: XSS through a crafted `SKILL.md`, project file, zip or AI reply; a BYO key leaking to any host other than the chosen provider; a demo provider key reaching the browser; ways around the Content Security Policy.
 
 ## Rules for contributors
 
-- Don't add third-party scripts. Any script on the page could read stored keys. The one exception is Google Analytics in `public/assets/js/analytics.js`, which only loads when the deploy sets a measurement ID.
-- Escape all dynamic content with `esc()` (`public/assets/js/lib/util.js`) before putting it into HTML.
-- A new network host must be added to `connect-src` in both `public/index.html` and `public/_headers`.
+- Don't add third-party scripts. Any script on the page could read stored keys. The one exception is Google Analytics in `app/public/assets/js/analytics.js`, which only loads when the deploy sets a measurement ID.
+- Prefer React text rendering; escape dynamic HTML through `esc()` (`app/src/lib/util.ts`).
+- A new network host must be added to the CSP in both `app/vite.config.ts` and `app/public/_headers`.
+- Never commit provider keys or put them in client-side code.
